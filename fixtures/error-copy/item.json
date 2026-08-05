@@ -1,0 +1,53 @@
+{
+  "id": "error-copy",
+  "created": "2026-08-05T13:12:00Z",
+  "question": "How should we talk to someone whose payment just failed?",
+  "notes": "This is the highest-traffic error in the product and it sets the register for every other message we write. Same information in both; only the voice differs.",
+  "how": "Read them out loud. One of them sounds like a person who is on your side, and one sounds like a company protecting itself. Pick the register you want the whole product to have.",
+  "map": {
+    "A": "plain and human, no apology, action first",
+    "B": "formal and apologetic, cause first"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        {
+          "kind": "text",
+          "title": "card declined",
+          "text": "Your bank declined the payment.\n\nThey do not tell us why, but it is usually a temporary block. Try again, or use a different card — nothing has been charged."
+        },
+        {
+          "kind": "text",
+          "title": "expired card",
+          "text": "That card expired in March. Add a new one and we will pick up where you left off."
+        },
+        {
+          "kind": "text",
+          "title": "insufficient funds",
+          "text": "There was not enough in the account to cover it. Nothing was charged. Try another card whenever you are ready."
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        {
+          "kind": "text",
+          "title": "card declined",
+          "text": "We're sorry — we were unable to process your payment at this time.\n\nYour financial institution declined the transaction. Please verify your payment details and try again, or contact your card issuer for more information."
+        },
+        {
+          "kind": "text",
+          "title": "expired card",
+          "text": "We're sorry — the card on file has expired and can no longer be used. Please update your payment method to continue your subscription."
+        },
+        {
+          "kind": "text",
+          "title": "insufficient funds",
+          "text": "We're sorry — your payment could not be completed due to insufficient funds. Please ensure sufficient funds are available and try again."
+        }
+      ]
+    }
+  ]
+}

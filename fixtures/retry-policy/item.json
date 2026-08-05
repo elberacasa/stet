@@ -1,0 +1,38 @@
+{
+  "id": "retry-policy",
+  "created": "2026-08-05T18:30:00Z",
+  "question": "How should we make the payment webhook retry?",
+  "notes": "The handler currently drops a webhook if the downstream call fails. Both patches fix it. They differ in where the retry lives and what happens to ordering when one event keeps failing.",
+  "how": "Read them as the person on call at 3am when the queue is backed up. Which one can you reason about without opening a dashboard, and which one silently reorders events?",
+  "tags": ["reliability", "api"],
+  "map": {
+    "A": "in-process exponential backoff inside the handler",
+    "B": "hand it back to the queue and let the broker redeliver"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        {
+          "kind": "diff",
+          "path": "src/webhooks/payment.ts",
+          "view": "patch",
+          "text": "@@ -12,9 +12,21 @@ export async function onPayment(event: PaymentEvent) {\n   const order = await orders.find(event.orderId)\n   if (!order) return ack()\n \n-  await ledger.record(order, event)\n-  await mailer.receipt(order)\n-  return ack()\n+  for (let attempt = 0; attempt < 5; attempt++) {\n+    try {\n+      await ledger.record(order, event)\n+      await mailer.receipt(order)\n+      return ack()\n+    } catch (err) {\n+      if (!isTransient(err)) throw err\n+      const wait = 250 * 2 ** attempt\n+      log.warn({ orderId: order.id, attempt, wait }, 'retrying')\n+      await sleep(wait)\n+    }\n+  }\n+  log.error({ orderId: order.id }, 'gave up after 5 attempts')\n+  return ack()\n }"
+        },
+        { "kind": "text", "view": "argument", "text": "The whole retry is on one screen. Nothing leaves the process, so the event cannot be reordered behind a later one, and a transient blip is invisible to everyone downstream. The cost is that the handler holds a connection for up to four seconds, and a broker redelivery on top of this multiplies attempts." }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        {
+          "kind": "diff",
+          "path": "src/webhooks/payment.ts",
+          "view": "patch",
+          "text": "@@ -12,9 +12,17 @@ export async function onPayment(event: PaymentEvent) {\n   const order = await orders.find(event.orderId)\n   if (!order) return ack()\n \n-  await ledger.record(order, event)\n-  await mailer.receipt(order)\n-  return ack()\n+  try {\n+    await ledger.record(order, event)\n+    await mailer.receipt(order)\n+    return ack()\n+  } catch (err) {\n+    if (!isTransient(err)) throw err\n+    // Redelivered by the broker with its own backoff, up to maxReceiveCount,\n+    // then parked on the dead-letter queue where a human can see it.\n+    log.warn({ orderId: order.id, err: err.code }, 'nacking for redelivery')\n+    return nack()\n+  }\n }"
+        },
+        { "kind": "text", "view": "argument", "text": "The handler stays short and the retry policy is configuration, not code, so it can change without a deploy. Failures end up on a dead-letter queue you can actually look at. The cost is that a persistently failing event is redelivered behind newer ones, so ordering is no longer guaranteed." }
+      ]
+    }
+  ]
+}

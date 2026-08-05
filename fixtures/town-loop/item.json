@@ -1,0 +1,28 @@
+{
+  "id": "town-loop",
+  "created": "2026-08-05T18:10:00Z",
+  "question": "Which loop plays under the town square?",
+  "notes": "It plays on repeat with nothing else competing for attention, so it has to survive being heard for minutes at a stretch. Both are rendered from the same synth at the same level; only the writing differs.",
+  "how": "Play both the whole way through, twice. Imagine standing in that square at dusk with nothing to do and nobody to talk to. Then say which one is more wrong in the right way.",
+  "tags": ["audio", "mood"],
+  "map": {
+    "A": "the 6/8 lullaby in A major, slow, mostly fundamental",
+    "B": "the 4/4 processional in F, faster, with parallel fifths"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        { "kind": "audio", "src": "loop-a.wav", "title": "town loop", "view": "listen" },
+        { "kind": "text", "view": "notes", "text": "3.2 s, 8 kHz. Slow enough that the silence between phrases does the work. The risk is that it reads as sad rather than abandoned, and sad wears out faster." }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        { "kind": "audio", "src": "loop-b.wav", "title": "town loop", "view": "listen" },
+        { "kind": "text", "view": "notes", "text": "2.6 s, 8 kHz. The fifths make it sound civic and a bit ceremonial, which is cheerful in a way the square no longer deserves. The risk is that a short bright loop gets irritating by the third pass." }
+      ]
+    }
+  ]
+}

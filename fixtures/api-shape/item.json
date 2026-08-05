@@ -1,0 +1,55 @@
+{
+  "id": "api-shape",
+  "created": "2026-08-05T13:10:00Z",
+  "question": "Which shape should the list endpoint return?",
+  "notes": "Every list endpoint we add from here follows whichever one wins. Both handle pagination; they differ in whether the envelope is always present and whether the cursor is opaque.",
+  "how": "Read them as the caller, not the author. Which one is harder to use wrong at 2am, and which one survives adding a field next month without breaking anyone?",
+  "map": {
+    "A": "envelope + opaque cursor (the shape Stripe uses)",
+    "B": "bare array + Link header (the shape GitHub uses)"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        {
+          "kind": "code",
+          "lang": "ts",
+          "title": "response",
+          "text": "{\n  \"data\": [\n    { \"id\": \"usr_01H\", \"email\": \"a@b.co\" },\n    { \"id\": \"usr_02K\", \"email\": \"c@d.co\" }\n  ],\n  \"has_more\": true,\n  \"next_cursor\": \"eyJpZCI6InVzcl8wMksifQ\"\n}"
+        },
+        {
+          "kind": "code",
+          "lang": "ts",
+          "title": "caller",
+          "text": "let cursor: string | undefined\ndo {\n  const page = await api.users.list({ cursor, limit: 50 })\n  for (const u of page.data) process(u)\n  cursor = page.next_cursor\n} while (cursor)"
+        },
+        {
+          "kind": "text",
+          "text": "Every response is an object, so adding a top-level field later never breaks a caller. The cursor is opaque, so we can change the underlying paging strategy without a version bump."
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        {
+          "kind": "code",
+          "lang": "ts",
+          "title": "response",
+          "text": "[\n  { \"id\": \"usr_01H\", \"email\": \"a@b.co\" },\n  { \"id\": \"usr_02K\", \"email\": \"c@d.co\" }\n]\n\n// Link: <https://api/users?page=3>; rel=\"next\""
+        },
+        {
+          "kind": "code",
+          "lang": "ts",
+          "title": "caller",
+          "text": "let url: string | undefined = '/users?limit=50'\nwhile (url) {\n  const res = await fetch(url)\n  for (const u of await res.json()) process(u)\n  url = parseLink(res.headers.get('link'))?.next\n}"
+        },
+        {
+          "kind": "text",
+          "text": "The happy path is one line: the body is the thing you asked for. Pagination lives in headers, where HTTP already put it, and `curl | jq '.[0]'` works with no unwrapping."
+        }
+      ]
+    }
+  ]
+}

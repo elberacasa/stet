@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 750" width="390" height="750" role="img" aria-label="Hero, variant A, mobile">
+  <rect width="390" height="750" fill="#fbf7f0"/>
+  <text x="28" y="46" font-family="Georgia,serif" font-size="19" fill="#2a2419">Kettle</text>
+  <g stroke="#2a2419" stroke-width="1.4">
+    <line x1="338" y1="35" x2="362" y2="35"/><line x1="338" y1="43" x2="362" y2="43"/><line x1="338" y1="51" x2="362" y2="51"/>
+  </g>
+  <line x1="0" y1="72" x2="390" y2="72" stroke="#e6ddcd"/>
+
+  <text x="28" y="204" font-family="Georgia,serif" font-size="42" fill="#2a2419">Slow software</text>
+  <text x="28" y="252" font-family="Georgia,serif" font-size="42" fill="#2a2419">for careful</text>
+  <text x="28" y="300" font-family="Georgia,serif" font-size="42" fill="#2a2419">people</text>
+  <text x="28" y="344" font-family="Georgia,serif" font-size="16" fill="#6b6152">We build the tool you will still</text>
+  <text x="28" y="366" font-family="Georgia,serif" font-size="16" fill="#6b6152">want in five years.</text>
+  <rect x="28" y="400" width="176" height="50" rx="2" fill="#2a2419"/>
+  <text x="116" y="431" text-anchor="middle" font-family="Georgia,serif" font-size="15" fill="#fbf7f0">See the work</text>
+  <text x="28" y="486" font-family="Georgia,serif" font-size="15" fill="#2a2419">Read the notes →</text>
+
+  <line x1="28" y1="560" x2="362" y2="560" stroke="#e6ddcd"/>
+  <g font-family="Georgia,serif" font-size="12" fill="#8d8677">
+    <text x="28" y="592">EST. 2019</text><text x="28" y="614">FOURTEEN PEOPLE</text>
+    <text x="28" y="636">EDINBURGH</text><text x="28" y="658">NO INVESTORS</text>
+  </g>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 750" width="390" height="750" role="img" aria-label="Hero, variant B, mobile">
+  <rect width="390" height="750" fill="#ffffff"/>
+  <text x="28" y="46" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" fill="#0b0d12">Kettle</text>
+  <g stroke="#0b0d12" stroke-width="1.6" stroke-linecap="round">
+    <line x1="340" y1="35" x2="362" y2="35"/><line x1="340" y1="43" x2="362" y2="43"/><line x1="340" y1="51" x2="362" y2="51"/>
+  </g>
+  <line x1="0" y1="72" x2="390" y2="72" stroke="#eef0f4"/>
+
+  <text x="195" y="214" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="44" font-weight="800" letter-spacing="-1.8" fill="#0b0d12">Slow software</text>
+  <text x="195" y="262" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="44" font-weight="800" letter-spacing="-1.8" fill="#0b0d12">for careful</text>
+  <text x="195" y="310" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="44" font-weight="800" letter-spacing="-1.8" fill="#0b0d12">people</text>
+  <text x="195" y="352" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" fill="#5b6373">We build the tool you will still</text>
+  <text x="195" y="374" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" fill="#5b6373">want in five years.</text>
+  <rect x="28" y="404" width="334" height="52" rx="26" fill="#2f6df6"/>
+  <text x="195" y="436" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" font-weight="600" fill="#ffffff">See the work</text>
+  <rect x="28" y="468" width="334" height="52" rx="26" fill="#ffffff" stroke="#dfe3ea"/>
+  <text x="195" y="500" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" font-weight="600" fill="#0b0d12">Read the notes</text>
+
+  <g font-family="Inter,Helvetica,system-ui,sans-serif" font-size="11" font-weight="600" letter-spacing="1" fill="#98a0b0">
+    <text x="195" y="600" text-anchor="middle">EST. 2019 · FOURTEEN PEOPLE</text>
+    <text x="195" y="622" text-anchor="middle">EDINBURGH · NO INVESTORS</text>
+  </g>
+</svg>

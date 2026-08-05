@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="1200" height="750" role="img" aria-label="Hero, variant B, desktop">
+  <rect width="1200" height="750" fill="#ffffff"/>
+  <rect x="0" y="0" width="1200" height="72" fill="#ffffff"/>
+  <text x="72" y="46" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4" fill="#0b0d12">Kettle</text>
+  <g font-family="Inter,Helvetica,system-ui,sans-serif" font-size="14" font-weight="500" fill="#5b6373">
+    <text x="880" y="45">Work</text><text x="960" y="45">Studio</text><text x="1050" y="45">Contact</text>
+  </g>
+  <line x1="0" y1="72" x2="1200" y2="72" stroke="#eef0f4"/>
+
+  <text x="600" y="256" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="80" font-weight="800" letter-spacing="-3" fill="#0b0d12">Slow software</text>
+  <text x="600" y="342" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="80" font-weight="800" letter-spacing="-3" fill="#0b0d12">for careful people</text>
+  <text x="600" y="396" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="18" fill="#5b6373">We build the tool you will still want in five years.</text>
+  <rect x="474" y="436" width="170" height="52" rx="26" fill="#2f6df6"/>
+  <text x="559" y="468" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" font-weight="600" fill="#ffffff">See the work</text>
+  <rect x="656" y="436" width="170" height="52" rx="26" fill="#ffffff" stroke="#dfe3ea"/>
+  <text x="741" y="468" text-anchor="middle" font-family="Inter,Helvetica,system-ui,sans-serif" font-size="15" font-weight="600" fill="#0b0d12">Read the notes</text>
+
+  <g font-family="Inter,Helvetica,system-ui,sans-serif" font-size="12" font-weight="600" letter-spacing="1.2" fill="#98a0b0">
+    <text x="600" y="606" text-anchor="middle">EST. 2019 · FOURTEEN PEOPLE · EDINBURGH · NO INVESTORS</text>
+  </g>
+</svg>

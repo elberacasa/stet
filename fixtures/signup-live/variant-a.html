@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign up — one step</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:#fbf7f0;color:#2a2419;display:grid;place-items:center;min-height:100vh;padding:24px}
+  .card{width:100%;max-width:360px}
+  h1{font:600 27px/1.2 Georgia,serif;margin:0 0 6px}
+  p.sub{margin:0 0 22px;color:#6b6152}
+  label{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b6152;margin:0 0 6px}
+  input{width:100%;padding:12px 13px;border:1px solid #ddd3c0;border-radius:2px;background:#fff;font:inherit}
+  input:focus{outline:none;border-color:#2a2419}
+  .row{margin-bottom:16px}
+  button{width:100%;padding:13px;border:0;border-radius:2px;background:#2a2419;color:#fbf7f0;
+    font:inherit;font-weight:600;cursor:pointer}
+  button:hover{background:#413828}
+  .fine{margin:14px 0 0;font-size:12px;color:#8d8677;text-align:center}
+  .done{display:none;padding:14px;border:1px solid #2a2419;margin-top:16px;font-size:14px}
+</style>
+<div class="card">
+  <h1>Start your trial</h1>
+  <p class="sub">Fourteen days. No card, no call.</p>
+  <form id="f">
+    <div class="row"><label for="e">Work email</label><input id="e" type="email" placeholder="you@company.com" required></div>
+    <div class="row"><label for="p">Password</label><input id="p" type="password" placeholder="At least 10 characters" required></div>
+    <button type="submit">Create account</button>
+  </form>
+  <p class="fine">One step. You are in straight after this.</p>
+  <div class="done" id="d">Account created. That was the whole flow.</div>
+</div>
+<script>
+  document.getElementById('f').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    document.getElementById('d').style.display = 'block';
+  });
+</script>

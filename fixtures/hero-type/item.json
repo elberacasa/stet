@@ -1,0 +1,30 @@
+{
+  "id": "hero-type",
+  "created": "2026-08-05T17:40:00Z",
+  "question": "Which register should the whole site speak in?",
+  "notes": "Same words, same layout grid, same build — only the type, the palette and the alignment differ. Whichever wins sets the headings, the buttons and the spacing scale for every page after this one.",
+  "how": "Press S and flip them in the same frame rather than reading them side by side. The difference you are judging is a feeling about a company, and it shows up in the flip long before you can argue for it. Check the mobile view too — one of these survives the fold and one does not.",
+  "tags": ["design", "typography"],
+  "map": {
+    "A": "serif, warm paper, left-aligned, square buttons",
+    "B": "geometric sans, pure white, centred, pill buttons"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        { "kind": "image", "src": "a-desktop.svg", "view": "desktop" },
+        { "kind": "image", "src": "a-mobile.svg", "view": "mobile" },
+        { "kind": "text", "text": "Reads like a studio with a history. The cost is that it looks less like software, and the left-aligned stack puts the second call to action below the fold on a small phone." }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        { "kind": "image", "src": "b-desktop.svg", "view": "desktop" },
+        { "kind": "image", "src": "b-mobile.svg", "view": "mobile" },
+        { "kind": "text", "text": "Reads like every well-funded startup of the last six years, which is either instant credibility or instant invisibility. Centred type stops working the moment a headline runs to three lines." }
+      ]
+    }
+  ]
+}

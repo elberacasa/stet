@@ -1,0 +1,49 @@
+{
+  "name": "stetmark",
+  "version": "0.1.0",
+  "description": "stet — let it stand. Your agents ask once, your answer stands. A local verdict gate that turns your taste into rules coding agents obey.",
+  "keywords": [
+    "ai",
+    "agents",
+    "coding-agent",
+    "human-in-the-loop",
+    "preferences",
+    "taste",
+    "claude-code",
+    "cursor",
+    "code-review",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "author": "Alejandro Beracasa <elberacasa@users.noreply.github.com> (https://github.com/elberacasa)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elberacasa/stet.git"
+  },
+  "homepage": "https://github.com/elberacasa/stet",
+  "bugs": {
+    "url": "https://github.com/elberacasa/stet/issues"
+  },
+  "type": "module",
+  "bin": {
+    "stet": "bin/stet.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "prepublishOnly": "tsc && vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

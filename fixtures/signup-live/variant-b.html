@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign up — three steps</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:#fff;color:#0b0d12;display:grid;place-items:center;min-height:100vh;padding:24px}
+  .card{width:100%;max-width:360px}
+  .steps{display:flex;gap:6px;margin-bottom:22px}
+  .steps i{height:3px;flex:1;background:#e7eaf0;border-radius:2px}
+  .steps i.on{background:#2f6df6}
+  h1{font:700 24px/1.25 ui-sans-serif,system-ui,sans-serif;letter-spacing:-.5px;margin:0 0 6px}
+  p.sub{margin:0 0 20px;color:#5b6373;font-size:14px}
+  label{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+  input{width:100%;padding:12px 13px;border:1px solid #dfe3ea;border-radius:10px;font:inherit}
+  input:focus{outline:none;border-color:#2f6df6;box-shadow:0 0 0 3px rgba(47,109,246,.14)}
+  button{width:100%;padding:13px;border:0;border-radius:10px;background:#2f6df6;color:#fff;
+    font:inherit;font-weight:600;cursor:pointer;margin-top:16px}
+  button:hover{background:#2760dd}
+  .back{background:none;color:#5b6373;font-weight:500;margin-top:8px}
+  .back:hover{background:#f3f5f9}
+  .fine{margin:14px 0 0;font-size:12px;color:#98a0b0;text-align:center}
+</style>
+<div class="card">
+  <div class="steps"><i class="on" id="s1"></i><i id="s2"></i><i id="s3"></i></div>
+  <div id="stage"></div>
+  <p class="fine" id="fine">Step <span id="n">1</span> of 3</p>
+</div>
+<script>
+  var step = 1;
+  var stages = [
+    { h: 'What is your email?', s: 'We will send a confirmation link.', l: 'Work email', t: 'email', p: 'you@company.com' },
+    { h: 'Choose a password', s: 'At least 10 characters.', l: 'Password', t: 'password', p: '' },
+    { h: 'Tell us about your team', s: 'This helps us set up your workspace.', l: 'Company name', t: 'text', p: 'Acme Inc' }
+  ];
+  function draw() {
+    if (step > 3) {
+      document.getElementById('stage').innerHTML = '<h1>All done</h1><p class="sub">Three screens later, you are in.</p>';
+      document.getElementById('fine').textContent = 'Finished';
+      return;
+    }
+    var c = stages[step - 1];
+    document.getElementById('stage').innerHTML =
+      '<h1>' + c.h + '</h1><p class="sub">' + c.s + '</p>' +
+      '<label for="x">' + c.l + '</label><input id="x" type="' + c.t + '" placeholder="' + c.p + '">' +
+      '<button id="next">Continue</button>' +
+      (step > 1 ? '<button class="back" id="back">Back</button>' : '');
+    document.getElementById('n').textContent = step;
+    for (var i = 1; i <= 3; i++) document.getElementById('s' + i).className = i <= step ? 'on' : '';
+    document.getElementById('next').onclick = function () { step++; draw(); };
+    var b = document.getElementById('back');
+    if (b) b.onclick = function () { step--; draw(); };
+  }
+  draw();
+</script>

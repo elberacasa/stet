@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="1200" height="750" role="img" aria-label="Hero, variant A, desktop">
+  <rect width="1200" height="750" fill="#fbf7f0"/>
+  <rect x="0" y="0" width="1200" height="72" fill="#fbf7f0"/>
+  <text x="72" y="46" font-family="Georgia,serif" font-size="21" fill="#2a2419">Kettle</text>
+  <g font-family="Georgia,serif" font-size="14" fill="#6b6152">
+    <text x="880" y="45">Work</text><text x="960" y="45">Studio</text><text x="1050" y="45">Contact</text>
+  </g>
+  <line x1="0" y1="72" x2="1200" y2="72" stroke="#e6ddcd"/>
+
+  <text x="72" y="250" font-family="Georgia,serif" font-size="76" fill="#2a2419">Slow software</text>
+  <text x="72" y="336" font-family="Georgia,serif" font-size="76" fill="#2a2419">for careful people</text>
+  <text x="72" y="392" font-family="Georgia,serif" font-size="19" fill="#6b6152">We build the tool you will still want in five years.</text>
+  <rect x="72" y="430" width="182" height="52" rx="2" fill="#2a2419"/>
+  <text x="163" y="463" text-anchor="middle" font-family="Georgia,serif" font-size="16" fill="#fbf7f0">See the work</text>
+  <text x="286" y="463" font-family="Georgia,serif" font-size="16" fill="#2a2419">Read the notes →</text>
+
+  <rect x="72" y="560" width="1056" height="1" fill="#e6ddcd"/>
+  <g font-family="Georgia,serif" font-size="13" fill="#8d8677">
+    <text x="72" y="606">EST. 2019</text><text x="320" y="606">FOURTEEN PEOPLE</text><text x="640" y="606">EDINBURGH</text><text x="920" y="606">NO INVESTORS</text>
+  </g>
+</svg>

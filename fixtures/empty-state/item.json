@@ -1,0 +1,33 @@
+{
+  "id": "empty-state",
+  "created": "2026-08-05T13:14:00Z",
+  "question": "Which empty state should we use everywhere?",
+  "notes": "Both are the invoices table with nothing in it. Whichever wins becomes the pattern for every empty list in the product.",
+  "how": "Look at them at a glance, the way a new user would in their first ten seconds. Which one tells you what this screen is for, and which one just tells you it is empty?",
+  "map": {
+    "A": "centred illustration, hides the table chrome",
+    "B": "keeps the table headers, message sits inside the structure"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        { "kind": "image", "src": "variant-a.svg", "title": "invoices, empty" },
+        {
+          "kind": "text",
+          "text": "The illustration carries the moment and the primary action is unmissable. The cost is that the table's shape is hidden until there is data, so the user learns the screen twice."
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        { "kind": "image", "src": "variant-b.svg", "title": "invoices, empty" },
+        {
+          "kind": "text",
+          "text": "The column headers stay, so the screen teaches its own shape before there is any data. The cost is that it reads as less finished, and the action is a text link rather than a button."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output. Published to npm from a fresh build — see prepublishOnly.
+dist/
+
+# The handoff brief: planning notes and product strategy, not part of the tool.
+BRIEF.md
+
+# stet's own working state. Pending decisions are transient, and in this repo
+# the canon was only ever test fixtures. In a real project you would commit
+# .stet/RULES.md and AGENTS.md — that is the whole point of them.
+.stet/
+AGENTS.md
+
+# Agent instruction surfaces stet writes into, when generated here by testing.
+CLAUDE.md
+.cursorrules
+.cursor/
+.windsurfrules
+.github/copilot-instructions.md
+
+# Packing artefacts
+*.tgz
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp

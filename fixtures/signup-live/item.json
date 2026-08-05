@@ -1,0 +1,28 @@
+{
+  "id": "signup-live",
+  "created": "2026-08-05T18:20:00Z",
+  "question": "How many steps should signing up take?",
+  "notes": "Both are running, not pictures of running. Click through them — type an email, press the button, go back. The one that wins sets the pattern for every flow in the product.",
+  "how": "Actually complete both. Do not judge from the first screen: one of these feels lighter for the first ten seconds and longer by the end. Count how many times your hand leaves the keyboard.",
+  "tags": ["onboarding", "forms"],
+  "map": {
+    "A": "one screen, everything at once",
+    "B": "three screens with a progress bar"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        { "kind": "url", "href": "variant-a.html", "title": "click through it", "view": "live" },
+        { "kind": "text", "view": "argument", "text": "Everything visible means the user can see exactly what is being asked before committing to anything. The cost is that the form looks like work at a glance, and a long one scares people off before they read it." }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        { "kind": "url", "href": "variant-b.html", "title": "click through it", "view": "live" },
+        { "kind": "text", "view": "argument", "text": "Each screen asks for one thing, which is easy to say yes to, and the progress bar promises an end. The cost is three round trips instead of one, and the user cannot see what is coming." }
+      ]
+    }
+  ]
+}
