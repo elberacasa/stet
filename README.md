@@ -138,10 +138,22 @@ decision beats a preamble sixty turns behind it.
 **Taste survives compaction.** `PostCompact` re-states the canon, because
 compaction is exactly when your preferences get summarised away.
 
-The hooks go in `.claude/settings.json` (or `--local`), are identified by their
-command string, and `stet claude remove` restores the file byte for byte. Your
-own hooks are never touched. `AGENTS.md` still works for every other agent —
-this is a layer on top, not a replacement.
+The hooks go in `.claude/settings.local.json`, which is per-developer and not
+checked in. That is deliberate: a hook committed to `.claude/settings.json`
+points at a binary your teammates may not have installed, and a hook that
+cannot run fails on every tool call while gating nothing — the repo would
+advertise a protection it is not providing. Use `--project` to share the wiring
+once everyone has stet.
+
+Discovery is handled by the surface stet already owns: the `AGENTS.md` block
+carries one line telling any agent to prompt its human to run `stet claude` if
+the repo is unwired. About twenty tokens, and it works for the teammate who has
+never heard of this tool.
+
+Entries are identified by their command, so `stet claude remove` finds them in
+either form and restores the file byte for byte. Your own hooks are never
+touched. `AGENTS.md` still works for every other agent — this is a layer on
+top, not a replacement.
 
 > **Restart your Claude Code session after wiring.** Hooks bind at session
 > start, so a session that was already running when you ran `stet claude` will
@@ -191,7 +203,7 @@ stet rule "<one line>"      record a correction straight into the canon
 stet rules [--tag design]   print the canon
 stet sync [--remove]        re-inject into agent surfaces, or restore them exactly
 
-stet claude                 wire into Claude Code's hooks (see above)
+stet claude [--project]     wire into Claude Code's hooks (see above)
 stet claude remove          unwire, restoring settings.json exactly
 stet claude status          is it wired?
 ```

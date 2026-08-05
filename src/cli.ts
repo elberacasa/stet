@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 interface Args {
   cmd: string;
@@ -118,7 +118,11 @@ async function hook(): Promise<void> {
 
 async function claude(): Promise<void> {
   const { install, installed, uninstall, WIRING } = await import('./claude.js');
-  const scope = args.flags.local ? 'local' : 'project';
+  // Local by default. A checked-in hook pointing at a binary a teammate has
+  // not installed fails on every tool call and gates nothing — the repo would
+  // claim a protection it is not providing, which is worse than no protection.
+  // `--project` opts into the shared form once the team has stet.
+  const scope = args.flags.project ? 'project' : 'local';
   const sub = args.rest[0] ?? 'install';
 
   if (sub === 'remove' || args.flags.remove) {

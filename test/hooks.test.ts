@@ -187,6 +187,28 @@ describe('claude code wiring', () => {
     expect(fs.existsSync(settingsPath(root, 'project'))).toBe(false);
   });
 
+  it('recognises its own entry in both forms the installer writes', () => {
+    // The pinned form is what you get before `npm i -g stetmark`. Failing to
+    // recognise it orphans the hooks on removal and duplicates them on install.
+    for (const command of ['stet hook pre-tool-use', 'node /abs/path/bin/stet.js hook pre-tool-use']) {
+      const file = settingsPath(root, 'project');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ hooks: { PreToolUse: [{ hooks: [{ type: 'command', command }] }] } }, null, 2));
+      expect(installed(root), command).toBe(true);
+      expect(uninstall(root).removed.length, command).toBe(1);
+    }
+  });
+
+  it('leaves hooks that merely mention stet alone', () => {
+    const file = settingsPath(root, 'project');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({
+      hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'echo "stet is great" >> hooks.log' }] }] },
+    }, null, 2));
+    expect(installed(root)).toBe(false);
+    expect(uninstall(root).removed).toHaveLength(0);
+  });
+
   it('can wire local scope instead', () => {
     install(root, 'local');
     expect(fs.existsSync(settingsPath(root, 'local'))).toBe(true);

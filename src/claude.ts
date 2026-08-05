@@ -6,8 +6,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Anything whose command contains this is ours, and only ours. */
-export const TAG = 'stet hook';
+/**
+ * Recognising our own entries has to survive both forms the installer writes:
+ * `stet hook pre-tool-use` when stet is on PATH, and
+ * `node /abs/path/bin/stet.js hook pre-tool-use` when it is not. Matching the
+ * literal string "stet hook" only catches the first, which silently orphans
+ * the second on removal and duplicates it on reinstall.
+ */
+export const TAG = /stet.*\bhook\s+(pre-tool-use|session-start|post-compact|user-prompt)\b/;
 
 export interface HookEntry {
   matcher?: string;
@@ -70,7 +76,7 @@ function read(file: string): Record<string, unknown> {
 }
 
 function isOurs(entry: HookEntry): boolean {
-  return (entry.hooks ?? []).some((h) => typeof h.command === 'string' && h.command.includes(TAG));
+  return (entry.hooks ?? []).some((h) => typeof h.command === 'string' && TAG.test(h.command));
 }
 
 export interface WireResult {
