@@ -132,6 +132,16 @@ describe('rules', () => {
     expect(weakness('Looks better')).toBeTruthy();
   });
 
+  it('catches a rule written to yourself rather than to an agent', () => {
+    // Real: this one passed every earlier check and told the next agent nothing.
+    expect(weakness('I think go with the flow')).toMatch(/written to yourself/);
+    expect(weakness("I'd keep the serif one")).toMatch(/written to yourself/);
+    expect(weakness('Maybe use the bare array')).toMatch(/written to yourself/);
+    // …without flagging a legitimate instruction that happens to contain "I"
+    expect(weakness('Invoices always show the client name before the amount')).toBeNull();
+    expect(weakness('Prefer bare arrays for list endpoints')).toBeNull();
+  });
+
   it('counts a rule as matched when a decision lands in its area', () => {
     appendRule(root, { ...item(), verdict: 'A', because: 'a design rule', tags: ['design'] });
     appendRule(root, { ...item(), verdict: 'A', because: 'an api rule', tags: ['api'] });

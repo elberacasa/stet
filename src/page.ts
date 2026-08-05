@@ -557,6 +557,8 @@ function weakness(t){
     return "names a variant label — those are shuffled per decision and mean nothing later";
   if(/^(looks?|feels?|seems?|sounds?)\\b/i.test(t)&&!/\\b(so|because|use|keep|never|always|prefer)\\b/i.test(t))
     return "reads as a reaction, not an instruction — say what to do next time";
+  if(/^(i\\s+(think|guess|feel|like|prefer|would|reckon)|i'?d|maybe|probably|let'?s)\\b/i.test(t))
+    return "written to yourself, not to an agent — drop the \\"I\\" and say what to do";
   return null;
 }
 
@@ -688,7 +690,10 @@ function wire(entry){
       }
       if(node){ node.textContent=w||""; node.style.display=w?"":"none" }
     });
-    if(weakness(reveal.rule.text)) setTimeout(function(){sharpen.focus();sharpen.select()},420);
+    // Rule 1: always take focus when the reveal lands, weak rule or not — the
+    // loop stays on the keyboard. The delay is the reveal's animation, so the
+    // mapping has landed before the cursor arrives.
+    setTimeout(function(){sharpen.focus();sharpen.select()},420);
   }
 }
 

@@ -172,6 +172,11 @@ export function weakness(text: string): string | null {
   if (/^(looks?|feels?|seems?|sounds?)\b/i.test(t) && !/\b(so|because|use|keep|never|always|prefer)\b/i.test(t)) {
     return 'reads as a reaction, not an instruction — say what to do next time';
   }
+  // "I think go with the flow" passed every check above and told the next
+  // agent nothing. A rule written in the first person is a note to yourself.
+  if (/^(i\s+(think|guess|feel|like|prefer|would|reckon)|i'?d|maybe|probably|let'?s)\b/i.test(t)) {
+    return 'written to yourself, not to an agent — drop the "I" and say what to do';
+  }
   return null;
 }
 
