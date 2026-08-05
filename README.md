@@ -138,6 +138,23 @@ decision beats a preamble sixty turns behind it.
 **Taste survives compaction.** `PostCompact` re-states the canon, because
 compaction is exactly when your preferences get summarised away.
 
+**And it notices what you never wrote down.** The gate only helps once a
+decision exists — but nothing creates one, because an agent trained to finish
+does not stop to ask. So stet watches for the same signal from the other side:
+`PostToolUse` records *which instruction* caused each write, and when one file
+has been revised across three separate instructions, `Stop` says so:
+
+```
+stet: unwritten taste detected.
+
+  src/hero.tsx — revised across 3 separate instructions this session
+```
+
+Three edits inside one instruction is an agent working. Three edits across
+three instructions is a human correcting — and a correction repeated is a
+preference nobody has recorded. `stet churn` shows the standing tally. This is
+a hypothesis about a signal, not a proven one; the threshold is `--threshold`.
+
 The hooks go in `.claude/settings.local.json`, which is per-developer and not
 checked in. That is deliberate: a hook committed to `.claude/settings.json`
 points at a binary your teammates may not have installed, and a hook that
@@ -203,6 +220,7 @@ stet rule "<one line>"      record a correction straight into the canon
 stet rules [--tag design]   print the canon
 stet sync [--remove]        re-inject into agent surfaces, or restore them exactly
 
+stet churn                  files this repo keeps having to redo
 stet claude [--project]     wire into Claude Code's hooks (see above)
 stet claude remove          unwire, restoring settings.json exactly
 stet claude status          is it wired?

@@ -22,12 +22,31 @@ import type { Rule } from './types.js';
 
 export interface HookInput {
   session_id?: string;
+  prompt_id?: string;
   hook_event_name?: string;
   cwd?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   user_prompt?: string;
 }
+
+/** What one session has been told, and what it has been made to redo. */
+interface Session {
+  injected: number[];
+  /** repo-relative path → the distinct prompts that caused a write to it */
+  edits: Record<string, string[]>;
+  /** paths already surfaced as churn, so it is said once */
+  flagged: string[];
+  at: number;
+}
+
+/**
+ * Revising the same file across separate instructions is the signature of
+ * taste being negotiated out loud instead of written down. Three is the point
+ * where it stops looking like iteration and starts looking like a preference
+ * nobody has recorded.
+ */
+export const CHURN_THRESHOLD = 3;
 
 export interface HookOutput {
   hookSpecificOutput?: {
@@ -56,25 +75,50 @@ function sessionFile(root: string, id: string): string {
   return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
 }
 
-function seen(root: string, id: string | undefined): Set<number> {
-  if (!id) return new Set();
+/**
+ * A fresh object every time. A shared literal spread with `{...EMPTY}` copies
+ * the nested `edits` map by reference, and one session's churn then leaks into
+ * every other session read in the same process.
+ */
+function blank(): Session {
+  return { injected: [], edits: {}, flagged: [], at: 0 };
+}
+
+export function loadSession(root: string, id: string | undefined): Session {
+  if (!id) return blank();
   try {
-    return new Set(JSON.parse(fs.readFileSync(sessionFile(root, id), 'utf8')).injected ?? []);
+    const raw = JSON.parse(fs.readFileSync(sessionFile(root, id), 'utf8'));
+    return {
+      injected: raw.injected ?? [],
+      edits: raw.edits ?? {},
+      flagged: raw.flagged ?? [],
+      at: raw.at ?? 0,
+    };
   } catch {
-    return new Set();
+    return blank();
   }
+}
+
+function save(root: string, id: string | undefined, s: Session): void {
+  if (!id) return;
+  const file = sessionFile(root, id);
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ ...s, at: Date.now() }));
+  } catch {
+    /* a hook must never be the reason a tool call fails */
+  }
+}
+
+function seen(root: string, id: string | undefined): Set<number> {
+  return new Set(loadSession(root, id).injected);
 }
 
 function remember(root: string, id: string | undefined, ns: number[]): void {
   if (!id || !ns.length) return;
-  const file = sessionFile(root, id);
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const all = [...seen(root, id), ...ns];
-    fs.writeFileSync(file, JSON.stringify({ injected: [...new Set(all)].sort((a, b) => a - b), at: Date.now() }));
-  } catch {
-    /* a hook must never be the reason a tool call fails */
-  }
+  const s = loadSession(root, id);
+  s.injected = [...new Set([...s.injected, ...ns])].sort((a, b) => a - b);
+  save(root, id, s);
 }
 
 /** Sessions are cheap files; drop the ones older than a day when we pass by. */
@@ -189,6 +233,70 @@ export function canonOnce(root: string, input: HookInput, event: string, budget 
   return { hookSpecificOutput: { hookEventName: event, additionalContext: parts.join('\n\n') } };
 }
 
+// ── churn: taste that is being said out loud instead of written down ──────
+
+/**
+ * After a write lands, note which instruction caused it. Distinct prompts
+ * matter, not distinct writes: three edits inside one instruction is an agent
+ * working, while three edits across three instructions is a human correcting.
+ */
+export function postToolUse(root: string, input: HookInput): HookOutput | null {
+  if (!WRITE_TOOLS.test(input.tool_name ?? '')) return null;
+  const rel = targetPath(root, input);
+  if (rel === null || !input.session_id) return null;
+  const prompt = input.prompt_id ?? '';
+  if (!prompt) return null;
+
+  const s = loadSession(root, input.session_id);
+  const seenPrompts = s.edits[rel] ?? [];
+  if (!seenPrompts.includes(prompt)) {
+    s.edits[rel] = [...seenPrompts, prompt];
+    save(root, input.session_id, s);
+  }
+  return null;
+}
+
+export interface Churn {
+  path: string;
+  revisions: number;
+}
+
+/** Files revised across enough separate instructions to look like preference. */
+export function churn(root: string, id: string | undefined, threshold = CHURN_THRESHOLD): Churn[] {
+  const s = loadSession(root, id);
+  return Object.entries(s.edits)
+    .map(([p, prompts]) => ({ path: p, revisions: prompts.length }))
+    .filter((c) => c.revisions >= threshold)
+    .sort((a, b) => b.revisions - a.revisions);
+}
+
+/**
+ * The end of a turn is the only moment with no task pressure competing for
+ * attention, which makes it the one place a nudge has a chance of landing.
+ * Said once per file per session.
+ */
+export function stop(root: string, input: HookInput, threshold = CHURN_THRESHOLD): HookOutput | null {
+  const s = loadSession(root, input.session_id);
+  const fresh = churn(root, input.session_id, threshold).filter((c) => !s.flagged.includes(c.path));
+  if (!fresh.length) return null;
+
+  s.flagged = [...s.flagged, ...fresh.map((c) => c.path)];
+  save(root, input.session_id, s);
+
+  const lines = [
+    'stet: unwritten taste detected.',
+    '',
+    ...fresh.map((c) => `  ${c.path} — revised across ${c.revisions} separate instructions this session`),
+    '',
+    'Being asked to redo the same file across separate instructions usually means',
+    'a preference is being negotiated out loud instead of recorded. If one of those',
+    'corrections was a matter of taste rather than a bug, say so and offer to write',
+    'it down — `stet rule "<the one line>"` — so it never has to be said again.',
+    'If it was just bugs, ignore this.',
+  ];
+  return { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: lines.join('\n') } };
+}
+
 /** Compaction just discarded the conversation — say it all again. */
 export function postCompact(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
   // Forget what this session was told: the context that held it is gone.
@@ -212,6 +320,10 @@ export function runHook(root: string, event: string, input: HookInput, budget = 
     switch (event) {
       case 'pre-tool-use':
         return preToolUse(root, input, budget);
+      case 'post-tool-use':
+        return postToolUse(root, input);
+      case 'stop':
+        return stop(root, input);
       case 'user-prompt':
         return userPromptSubmit(root, input, budget);
       case 'post-compact':

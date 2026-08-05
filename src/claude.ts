@@ -13,7 +13,7 @@ import path from 'node:path';
  * literal string "stet hook" only catches the first, which silently orphans
  * the second on removal and duplicates it on reinstall.
  */
-export const TAG = /stet.*\bhook\s+(pre-tool-use|session-start|post-compact|user-prompt)\b/;
+export const TAG = /stet.*\bhook\s+(pre-tool-use|post-tool-use|stop|session-start|post-compact|user-prompt)\b/;
 
 export interface HookEntry {
   matcher?: string;
@@ -33,6 +33,17 @@ export const WIRING: Wiring[] = [
     matcher: 'Write|Edit|MultiEdit|NotebookEdit',
     arg: 'pre-tool-use',
     why: 'denies writes into a path an undecided question claims, and delivers the rules for that path',
+  },
+  {
+    event: 'PostToolUse',
+    matcher: 'Write|Edit|MultiEdit|NotebookEdit',
+    arg: 'post-tool-use',
+    why: 'notes which instruction caused each write, to spot taste being said out loud',
+  },
+  {
+    event: 'Stop',
+    arg: 'stop',
+    why: 'at the end of a turn, names files you had to correct repeatedly',
   },
   {
     event: 'SessionStart',

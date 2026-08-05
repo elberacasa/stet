@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 interface Args {
   cmd: string;
@@ -72,6 +72,8 @@ async function main(): Promise<void> {
       return hook();
     case 'claude':
       return claude();
+    case 'churn':
+      return showChurn();
     case 'version':
     case '--version':
       return out(VERSION);
@@ -155,6 +157,44 @@ async function claude(): Promise<void> {
   out();
   out(`  ${dim('written to')} ${path.relative(root, r.file) || r.file}`);
   out(`  ${dim('undo with')} stet claude remove`);
+  out();
+}
+
+/** Which files this repo keeps having to redo, across every recent session. */
+async function showChurn(): Promise<void> {
+  const { churn, loadSession, CHURN_THRESHOLD } = await import('./hooks.js');
+  const threshold = Number(args.flags.threshold) || CHURN_THRESHOLD;
+  const dir = path.join(paths(root).stet, 'sessions');
+  let files: string[] = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  } catch {
+    /* no sessions yet */
+  }
+
+  const total = new Map<string, number>();
+  for (const f of files) {
+    const id = f.replace(/\.json$/, '');
+    for (const c of churn(root, id, threshold)) total.set(c.path, (total.get(c.path) ?? 0) + c.revisions);
+    // a file below the threshold in one session may still be worth seeing
+    for (const [p, prompts] of Object.entries(loadSession(root, id).edits)) {
+      if (!total.has(p) && prompts.length > 1) total.set(p, prompts.length);
+    }
+  }
+
+  const rows = [...total.entries()].sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return out(dim('  nothing has been revised more than once yet'));
+
+  out();
+  out(`  ${warm('files this repo keeps redoing')} ${dim(`— ${files.length} session${files.length === 1 ? '' : 's'}`)}`);
+  out();
+  for (const [p, n] of rows) {
+    const hot = n >= threshold;
+    out(`  ${hot ? warm(String(n).padStart(3)) : dim(String(n).padStart(3))}  ${hot ? p : dim(p)}`);
+  }
+  out();
+  out(dim(`  ${threshold}+ separate instructions on one file usually means a preference nobody wrote down.`));
+  out(dim('  write it down once:  stet rule "<the one line>"'));
   out();
 }
 

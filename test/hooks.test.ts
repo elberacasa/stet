@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { globToRegExp, matches, matchesAny } from '../src/glob.js';
-import { canonOnce, postCompact, preToolUse, runHook, targetPath } from '../src/hooks.js';
-import { install, installed, settingsPath, uninstall } from '../src/claude.js';
+import { canonOnce, churn, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
+import { install, installed, settingsPath, uninstall, WIRING } from '../src/claude.js';
 import { init } from '../src/store.js';
 
 let root: string;
@@ -142,6 +142,63 @@ describe('surviving compaction', () => {
   });
 });
 
+describe('churn — taste said out loud instead of written down', () => {
+  const edit = (file: string, prompt: string, session = 'c1') => ({
+    session_id: session, prompt_id: prompt, cwd: root,
+    tool_name: 'Edit', tool_input: { file_path: path.join(root, file) },
+  });
+
+  it('does not mistake an agent working for a human correcting', () => {
+    // Five writes to one file, all inside a single instruction: that is just work.
+    for (let i = 0; i < 5; i++) postToolUse(root, edit('src/hero.tsx', 'p1'));
+    expect(churn(root, 'c1')).toHaveLength(0);
+    expect(stop(root, { session_id: 'c1', cwd: root })).toBeNull();
+  });
+
+  it('flags a file revised across separate instructions', () => {
+    postToolUse(root, edit('src/hero.tsx', 'p1'));
+    postToolUse(root, edit('src/hero.tsx', 'p2'));
+    expect(churn(root, 'c1')).toHaveLength(0);      // two is still iteration
+    postToolUse(root, edit('src/hero.tsx', 'p3'));
+    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3 }]);
+
+    const out = stop(root, { session_id: 'c1', cwd: root });
+    expect(out?.hookSpecificOutput?.additionalContext).toContain('src/hero.tsx');
+    expect(out?.hookSpecificOutput?.additionalContext).toContain('3 separate instructions');
+    expect(out?.hookSpecificOutput?.additionalContext).toContain('stet rule');
+  });
+
+  it('says it once per file, not once per turn', () => {
+    for (const p of ['p1', 'p2', 'p3']) postToolUse(root, edit('src/hero.tsx', p));
+    expect(stop(root, { session_id: 'c1', cwd: root })).not.toBeNull();
+    expect(stop(root, { session_id: 'c1', cwd: root })).toBeNull();
+
+    // …but a second file that starts churning is still worth saying
+    for (const p of ['p4', 'p5', 'p6']) postToolUse(root, edit('src/nav.tsx', p));
+    const out = stop(root, { session_id: 'c1', cwd: root });
+    expect(out?.hookSpecificOutput?.additionalContext).toContain('src/nav.tsx');
+    expect(out?.hookSpecificOutput?.additionalContext).not.toContain('src/hero.tsx');
+  });
+
+  it('keeps sessions apart', () => {
+    for (const p of ['p1', 'p2', 'p3']) postToolUse(root, edit('src/hero.tsx', p, 'sA'));
+    expect(churn(root, 'sA')).toHaveLength(1);
+    expect(churn(root, 'sB')).toHaveLength(0);
+  });
+
+  it('ignores reads, and writes it cannot place', () => {
+    postToolUse(root, { ...edit('src/hero.tsx', 'p1'), tool_name: 'Read' });
+    postToolUse(root, { ...edit('src/hero.tsx', 'p2'), prompt_id: undefined });
+    postToolUse(root, edit('../outside.ts', 'p3'));
+    expect(churn(root, 'c1')).toHaveLength(0);
+  });
+
+  it('never lets the journal interfere with the gate', () => {
+    // PostToolUse must not deny anything, ever — the write has already happened.
+    expect(postToolUse(root, edit('src/hero.tsx', 'p1'))).toBeNull();
+  });
+});
+
 describe('hook dispatch', () => {
   it('never throws, whatever it is handed', () => {
     expect(runHook(root, 'pre-tool-use', {})).toBeNull();
@@ -159,7 +216,7 @@ describe('claude code wiring', () => {
     install(root);
     expect(installed(root)).toBe(true);
     const text = fs.readFileSync(settingsPath(root, 'project'), 'utf8');
-    expect(text.match(/stet hook/g)).toHaveLength(3);
+    expect(text.match(/stet hook/g)).toHaveLength(WIRING.length);
   });
 
   it('leaves the user\'s own hooks and settings alone, and restores them exactly', () => {
