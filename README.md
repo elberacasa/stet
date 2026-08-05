@@ -143,6 +143,11 @@ command string, and `stet claude remove` restores the file byte for byte. Your
 own hooks are never touched. `AGENTS.md` still works for every other agent —
 this is a layer on top, not a replacement.
 
+> **Restart your Claude Code session after wiring.** Hooks bind at session
+> start, so a session that was already running when you ran `stet claude` will
+> not be gated. `stet claude status` tells you whether the wiring is there; only
+> a fresh session tells you whether it is live.
+
 ## Three doors into the canon
 
 - **Blind A/B** — the highest-quality judgment, because you can't cheat it.

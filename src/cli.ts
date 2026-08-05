@@ -75,8 +75,16 @@ async function main(): Promise<void> {
     case 'version':
     case '--version':
       return out(VERSION);
-    default:
+    case 'help':
+    case '--help':
+    case '-h':
       return help();
+    default:
+      // Printing help for an unknown command reads as success. It is how an
+      // older global install silently ignores a command it has never heard of.
+      process.stderr.write(`stet: unknown command "${args.cmd}" (this is stet ${VERSION})\n`);
+      help();
+      return process.exit(1);
   }
 }
 
