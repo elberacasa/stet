@@ -314,6 +314,13 @@ export function userPromptSubmit(root: string, input: HookInput, budget = DEFAUL
   return canonOnce(root, input, 'UserPromptSubmit', budget);
 }
 
+/**
+ * The events this build actually implements. Wiring written by a newer stet
+ * and run by an older one produces hooks that fire, return nothing, and gate
+ * nothing — wired and useless, which reads exactly like working.
+ */
+export const EVENTS = ['pre-tool-use', 'post-tool-use', 'stop', 'session-start', 'post-compact', 'user-prompt'] as const;
+
 /** Dispatch. Never throws: a broken hook must not break the session. */
 export function runHook(root: string, event: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
   try {

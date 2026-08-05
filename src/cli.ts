@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 interface Args {
   cmd: string;
@@ -101,6 +101,13 @@ async function main(): Promise<void> {
  */
 async function hook(): Promise<void> {
   const event = args.rest[0] ?? '';
+  // `stet hook events` is how a wiring checks the binary it is pointed at.
+  // It reads no stdin, so it cannot block.
+  if (event === 'events') {
+    const { EVENTS } = await import('./hooks.js');
+    out(JSON.stringify({ version: VERSION, events: EVENTS }));
+    return;
+  }
   let input: import('./hooks.js').HookInput = {};
   try {
     input = JSON.parse(await readStdin());
@@ -133,7 +140,31 @@ async function claude(): Promise<void> {
     return;
   }
   if (sub === 'status') {
-    out(installed(root, scope) ? `  ${cool('wired')} — ${path.relative(root, install(root, scope, 'stet', { dryRun: true }).file)}` : dim('  not wired'));
+    const file = install(root, scope, 'stet', { dryRun: true }).file;
+    if (!installed(root, scope)) return out(dim('  not wired'));
+    out(`  ${cool('wired')} — ${path.relative(root, file) || file}`);
+
+    // Wired is not the same as working. Ask the binary the hooks actually
+    // point at which events it implements, rather than assuming it is this one.
+    const wired = wiredCommands(file);
+    for (const cmd of new Set(wired.map((w) => w.command))) {
+      const probe = await askEvents(cmd);
+      const events = wired.filter((w) => w.command === cmd).map((w) => w.event);
+      if (!probe.ok) {
+        out(probe.why === 'too-old'
+          ? `  ${warm('!')} the stet these hooks call is too old to say what it supports.\n` +
+            `    it fires, returns nothing, and gates nothing. fix: ${cool('npm i -g stetmark@latest')}`
+          : `  ${warm('!')} could not run ${JSON.stringify(cmd)} — those hooks fire and do nothing`);
+        continue;
+      }
+      const missing = events.filter((e) => !probe.events.includes(e));
+      if (missing.length) {
+        out(`  ${warm('!')} that command is stet ${probe.version}, which does not implement: ${missing.join(', ')}`);
+        out(`    those hooks fire, return nothing, and gate nothing. fix: ${cool('npm i -g stetmark@latest')}`);
+      } else {
+        out(`  ${cool('verified')} ${dim(`against stet ${probe.version} — all ${events.length} events implemented`)}`);
+      }
+    }
     return;
   }
 
@@ -156,6 +187,20 @@ async function claude(): Promise<void> {
   for (const w of WIRING) out(`  ${cool(w.event.padEnd(13))} ${dim(w.why)}`);
   out();
   out(`  ${dim('written to')} ${path.relative(root, r.file) || r.file}`);
+
+  // Wiring is written by whichever stet you ran; the hooks call whichever stet
+  // is on PATH. Those are not always the same build.
+  const probe = await askEvents(`${command} hook events`);
+  const need = WIRING.map((w) => w.arg);
+  const missing = probe.ok ? need.filter((e) => !probe.events.includes(e)) : need;
+  if (missing.length) {
+    out();
+    out(`  ${warm('!')} ${probe.ok
+      ? `the stet these hooks call is ${probe.version}, which does not implement:`
+      : 'the stet these hooks call is older than this one, and does not implement:'}`);
+    out(`    ${missing.join(', ')}`);
+    out(`    they will fire and do nothing. ${cool('npm i -g stetmark@latest')}${dim(', then re-run stet claude')}`);
+  }
   out(`  ${dim('undo with')} stet claude remove`);
   out();
 }
@@ -358,6 +403,63 @@ function help(): void {
 
   ${dim('--budget <tokens>')}           cap the injected block (default ${DEFAULT_BUDGET})
 `);
+}
+
+/** The commands a settings file has wired, and which event each one serves. */
+function wiredCommands(file: string): Array<{ command: string; event: string }> {
+  let settings: Record<string, unknown>;
+  try {
+    settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return [];
+  }
+  const hooks = (settings.hooks ?? {}) as Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
+  const found: Array<{ command: string; event: string }> = [];
+  for (const list of Object.values(hooks)) {
+    for (const entry of list ?? []) {
+      for (const h of entry.hooks ?? []) {
+        const m = /^(.*?)\s+hook\s+(\S+)\s*$/.exec(h.command ?? '');
+        if (m) found.push({ command: `${m[1]} hook events`, event: m[2] });
+      }
+    }
+  }
+  return found;
+}
+
+type Probe =
+  | { ok: true; version: string; events: string[] }
+  | { ok: false; why: 'unrunnable' | 'too-old' };
+
+/**
+ * Ask a wired command what it can actually do. A stet too old to answer is a
+ * different problem from one that will not run, and the fix differs.
+ */
+function askEvents(command: string): Promise<Probe> {
+  return new Promise((done) => {
+    let outBuf = '';
+    let ran = false;
+    const p = spawn(command, { shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    p.stdout.on('data', (d) => {
+      ran = true;
+      outBuf += d;
+    });
+    p.on('error', () => done({ ok: false, why: 'unrunnable' }));
+    const timer = setTimeout(() => {
+      p.kill();
+      done({ ok: false, why: 'unrunnable' });
+    }, 5000);
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      try {
+        const parsed = JSON.parse(outBuf.trim());
+        if (Array.isArray(parsed.events)) return done({ ok: true, version: String(parsed.version ?? '?'), events: parsed.events });
+      } catch {
+        /* fall through */
+      }
+      // Exited cleanly but said nothing: a build that predates event probing.
+      done({ ok: false, why: code === 0 || ran ? 'too-old' : 'unrunnable' });
+    });
+  });
 }
 
 /** Is this command actually runnable? A hook that is not, fails silently. */

@@ -174,8 +174,22 @@ top, not a replacement.
 
 > **Restart your Claude Code session after wiring.** Hooks bind at session
 > start, so a session that was already running when you ran `stet claude` will
-> not be gated. `stet claude status` tells you whether the wiring is there; only
-> a fresh session tells you whether it is live.
+> not be gated.
+
+`stet claude status` does not just check that the wiring exists — it runs the
+binary the hooks actually call and asks which events it implements:
+
+```
+wired — .claude/settings.local.json
+verified against stet 0.5.0 — all 5 events implemented
+```
+
+That check exists because the failure it catches is invisible. The wiring is
+written by whichever stet you ran; the hooks call whichever stet is on `PATH`,
+and `npm publish` does not update your own machine. An older binary handles the
+events it knows and returns nothing for the rest — so the hooks fire, gate
+nothing, and every surface reports a healthy install. It bit this project four
+times before it was made to check itself.
 
 ## Three doors into the canon
 

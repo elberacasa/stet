@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { globToRegExp, matches, matchesAny } from '../src/glob.js';
-import { canonOnce, churn, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
+import { canonOnce, churn, EVENTS, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
 import { install, installed, settingsPath, uninstall, WIRING } from '../src/claude.js';
 import { init } from '../src/store.js';
 
@@ -264,6 +264,12 @@ describe('claude code wiring', () => {
     }, null, 2));
     expect(installed(root)).toBe(false);
     expect(uninstall(root).removed).toHaveLength(0);
+  });
+
+  it('implements every event it wires', () => {
+    // Wiring an event this build does not handle produces a hook that fires,
+    // returns nothing, and gates nothing — wired and useless.
+    for (const w of WIRING) expect(EVENTS as readonly string[]).toContain(w.arg);
   });
 
   it('can wire local scope instead', () => {
