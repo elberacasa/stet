@@ -95,6 +95,54 @@ deterministically, when a rule can't survive on its own:
    teaches its own shape                                     ← binding
 ```
 
+## Claude Code: a gate, not a suggestion
+
+```bash
+stet claude          # wire it in     ·  stet claude remove  ·  stet claude status
+```
+
+Every other human-in-the-loop tool writes instructions into a config file and
+hopes. That is the weakest place to put a rule: it is read once at session
+start, then competes with every token that arrives after it, and by turn sixty
+it is losing to the last thing the agent read.
+
+stet wires into Claude Code's hooks instead, which changes three things:
+
+**Writes into an undecided path are denied.** A pending decision can claim
+paths with `globs`. When the agent tries to write there, the tool call is
+refused and the question is handed back to it:
+
+```
+stet: this path is governed by a decision the human has not made yet.
+
+  api-shape — "Which shape should the list endpoint return?"
+  claims: src/api/**
+
+Do not implement either option yet — whichever you pick has a 50% chance of
+being thrown away. Either work somewhere else, or block on the verdict with:
+  stet await api-shape
+```
+
+An instruction can be ignored. A denied tool call cannot. This is the only
+reliable way to stop an agent that is trained to finish.
+
+**Rules arrive when they apply.** A rule scoped with `Globs:` is delivered as a
+system reminder at the moment the agent writes a matching file — and never
+twice in the same session. Measured on a 40-rule canon in a session touching
+two of six areas: **1046 tokens always-resident → 538 delivered just in time, a
+49% reduction, with 20 rules never sent at all.** Two honest caveats: resident
+context is prompt-cached, so the cost saving is smaller than the token saving;
+and the real win is placement, not size — a reminder immediately before the
+decision beats a preamble sixty turns behind it.
+
+**Taste survives compaction.** `PostCompact` re-states the canon, because
+compaction is exactly when your preferences get summarised away.
+
+The hooks go in `.claude/settings.json` (or `--local`), are identified by their
+command string, and `stet claude remove` restores the file byte for byte. Your
+own hooks are never touched. `AGENTS.md` still works for every other agent —
+this is a layer on top, not a replacement.
+
 ## Three doors into the canon
 
 - **Blind A/B** — the highest-quality judgment, because you can't cheat it.
@@ -137,6 +185,10 @@ stet await <id> [--timeout] block until decided, print the verdict
 stet rule "<one line>"      record a correction straight into the canon
 stet rules [--tag design]   print the canon
 stet sync [--remove]        re-inject into agent surfaces, or restore them exactly
+
+stet claude                 wire into Claude Code's hooks (see above)
+stet claude remove          unwire, restoring settings.json exactly
+stet claude status          is it wired?
 ```
 
 ## Where the rules go

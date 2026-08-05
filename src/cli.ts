@@ -3,14 +3,17 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { appendDirectRule, DEFAULT_BUDGET, readRules, renderBlock, selectRules } from './rules.js';
 import { notify, open } from './notify.js';
-import { serve } from './server.js';
+// server.ts pulls in the 39KB page document. The hook path runs on every tool
+// call, so it is imported lazily and only by the command that serves.
 import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from './store.js';
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 interface Args {
   cmd: string;
@@ -65,6 +68,10 @@ async function main(): Promise<void> {
       return doSync();
     case 'rule':
       return directRule();
+    case 'hook':
+      return hook();
+    case 'claude':
+      return claude();
     case 'version':
     case '--version':
       return out(VERSION);
@@ -75,7 +82,72 @@ async function main(): Promise<void> {
 
 // ── the default command: everything ───────────────────────────────────────
 
+// ── hooks: the gate ───────────────────────────────────────────────────────
+
+/**
+ * Called by Claude Code on every matching tool call. Two rules govern this
+ * path: it must be fast, and it must never break the session. Any failure
+ * exits 0 with no output, which Claude Code treats as "carry on".
+ */
+async function hook(): Promise<void> {
+  const event = args.rest[0] ?? '';
+  let input: import('./hooks.js').HookInput = {};
+  try {
+    input = JSON.parse(await readStdin());
+  } catch {
+    process.exit(0);
+  }
+  try {
+    const here = input.cwd ? findRoot(input.cwd) : root;
+    const { runHook } = await import('./hooks.js');
+    const result = runHook(here, event, input, budget);
+    if (result) process.stdout.write(JSON.stringify(result));
+  } catch {
+    /* silence is the correct failure mode for a hook */
+  }
+  process.exit(0);
+}
+
+async function claude(): Promise<void> {
+  const { install, installed, uninstall, WIRING } = await import('./claude.js');
+  const scope = args.flags.local ? 'local' : 'project';
+  const sub = args.rest[0] ?? 'install';
+
+  if (sub === 'remove' || args.flags.remove) {
+    const r = uninstall(root, scope);
+    out(r.removed.length ? `  ${cool('removed')} ${r.removed.length} hook(s) from ${path.relative(root, r.file)}` : dim('  nothing wired'));
+    return;
+  }
+  if (sub === 'status') {
+    out(installed(root, scope) ? `  ${cool('wired')} — ${path.relative(root, install(root, scope, 'stet', { dryRun: true }).file)}` : dim('  not wired'));
+    return;
+  }
+
+  // A hook that cannot be found fails quietly and the gate silently does not
+  // exist — which is worse than not installing it. Resolve it now, and pin an
+  // absolute path if `stet` is not on PATH.
+  let command = args.flags.command ? String(args.flags.command) : '';
+  if (!command) {
+    const onPath = await resolves('stet');
+    command = onPath ? 'stet' : `${process.execPath} ${fileURLToPath(new URL('../bin/stet.js', import.meta.url))}`;
+    if (!onPath) {
+      process.stderr.write(`stet: not on PATH, so the hook is pinned to this checkout.\n` +
+        `      after \`npm i -g stetmark\`, re-run \`stet claude\` to use the short form.\n`);
+    }
+  }
+  const r = install(root, scope, command);
+  out();
+  out(`  ${warm('stet')} is now a gate in this repo, not a suggestion.`);
+  out();
+  for (const w of WIRING) out(`  ${cool(w.event.padEnd(13))} ${dim(w.why)}`);
+  out();
+  out(`  ${dim('written to')} ${path.relative(root, r.file) || r.file}`);
+  out(`  ${dim('undo with')} stet claude remove`);
+  out();
+}
+
 async function run(): Promise<void> {
+  const { serve } = await import('./server.js');
   const fresh = init(root);
   const surfaces = sync(root, readRules(root), { budget });
   const rules = readRules(root);
@@ -228,8 +300,21 @@ function help(): void {
   ${cool('stet rules')} [--tag design]   print the canon
   ${cool('stet sync')} [--remove]        re-inject rules into agent surfaces, or restore them
 
+  ${cool('stet claude')}                 wire into Claude Code — rules arrive when they apply,
+                              and writes into an undecided path are denied
+  ${cool('stet claude remove')}          unwire  ${dim('·')}  ${cool('stet claude status')}  check
+
   ${dim('--budget <tokens>')}           cap the injected block (default ${DEFAULT_BUDGET})
 `);
+}
+
+/** Is this command actually runnable? A hook that is not, fails silently. */
+function resolves(cmd: string): Promise<boolean> {
+  return new Promise((done) => {
+    const probe = spawn(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: 'ignore' });
+    probe.on('error', () => done(false));
+    probe.on('close', (code) => done(code === 0));
+  });
 }
 
 function readStdin(): Promise<string> {
