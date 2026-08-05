@@ -13,6 +13,11 @@ BRIEF.md
 .stet/
 AGENTS.md
 
+# Local Claude Code wiring. `stet claude` writes machine-specific paths here
+# until stetmark is installed globally, so it is per-developer, not shared.
+.claude/settings.json
+.claude/settings.local.json
+
 # Agent instruction surfaces stet writes into, when generated here by testing.
 CLAUDE.md
 .cursorrules
