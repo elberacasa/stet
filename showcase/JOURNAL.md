@@ -396,6 +396,54 @@ never once been tested.
 
 ---
 
+## `await` under multi-agent load
+
+The claim being tested: a fleet of agents can block on verdicts, burn nothing,
+and each wake with its own answer. Six scenarios, and a seventh built to hunt
+one specific race.
+
+```
+12 agents, verdicts landing as they boot   ✓ 12/12, slowest 115ms
+a verdict that already happened            ✓ returns in 47ms, no event needed
+6 agents blocked on one decision           ✓ all six wake
+12 blocked at once                         ✓ 0% CPU total
+an agent nobody answers                    ✓ exits 1 at 2065ms for a 2s timeout
+8 waiters + 8 writers, verdicts reversed   ✓ 16/16, 0 duplicate rule numbers
+```
+
+The fan-out case is the one that matters for a workflow: eight agents blocked
+on verdicts while eight more wrote rules into the same canon, with the verdicts
+landing in reverse order. Every waiter woke with its own answer, every writer
+succeeded, no rule was lost, no rule number collided, and `AGENTS.md` came out
+whole.
+
+### A race I could not reproduce, and closed anyway
+
+`await` checks whether the decision is already made, then installs a file
+watcher. A verdict landing *between* those two steps fires no event the watcher
+can see, and the agent would block until its timeout for an answer that already
+exists.
+
+I tried to hit it: 140 trials sweeping the delay from 40ms to 316ms in 4ms
+steps, which straddles the moment the child process boots and reaches its check.
+121 trials found the verdict already decided; 19 were genuinely woken by the
+watcher; **zero hung.** The boundary was approached from both sides many times
+and never landed inside it — the window is sub-millisecond, and 4ms granularity
+is not fine enough to hit it.
+
+So: not reproduced, and reported as not reproduced. But the ordering is right
+there in the code, and closing it costs one extra `stat` after the watcher is
+installed. That is the cheapest possible insurance against an agent hanging for
+a decision that has already been made, which is a failure a human would never
+think to look for.
+
+This is a different category from the other findings in this log. Everything
+above was found by running the thing. This one was found by reading the order of
+two lines, and the honest status is *theoretically open, practically unobserved,
+now impossible.*
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.

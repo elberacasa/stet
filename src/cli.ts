@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.14.0';
+const VERSION = '0.15.0';
 
 interface Args {
   cmd: string;
@@ -511,6 +511,20 @@ async function awaitDecision(): Promise<void> {
     const timer = timeout
       ? setTimeout(() => finish(() => reject(new Error(`timed out after ${timeout}s waiting on ${id}`))), timeout * 1000)
       : null;
+
+    // Check once more, now that we are listening. A verdict landing between the
+    // first check and this watcher being installed fires no event we can see,
+    // and the agent would then block until its timeout for a decision that has
+    // already been made. The window is sub-millisecond and was never reproduced
+    // in 140 timed attempts — but it is there in the ordering, and closing it
+    // costs one stat.
+    const late = decided();
+    if (late) {
+      finish(() => {
+        report(late);
+        resolve();
+      });
+    }
   });
 }
 

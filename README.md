@@ -298,6 +298,11 @@ sees the old canon or the new one and never half of one.
 **The gate never locks.** The hook path only reads, so `PreToolUse` stays at
 50ms no matter how many agents are writing.
 
+`await` was tested in the same shape — eight agents blocked on verdicts while
+eight more wrote rules, verdicts landing in reverse order. All sixteen
+succeeded, no rule lost, no rule number duplicated, `AGENTS.md` whole. Twelve
+agents blocked at once measured **0% CPU in total**.
+
 ## What stet deliberately is not
 
 Not an agent orchestrator. Not a dashboard. Not traffic-based A/B testing. Not
