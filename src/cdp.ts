@@ -151,7 +151,11 @@ export class Chrome {
         width,
         height,
         deviceScaleFactor: 1,
-        mobile: width < 600,
+        // Deliberately not mobile emulation. With `mobile: true` Chrome
+        // shrink-to-fits when content overflows, so the page lays out wider
+        // than asked and the capture is no longer "this page at 390px".
+        // A matched view has to mean exactly the width it says.
+        mobile: false,
       }, sessionId);
       await this.send('Page.enable', {}, sessionId);
       const loaded = this.once('Page.loadEventFired', 15_000);
@@ -190,11 +194,32 @@ export class Chrome {
     } catch {
       /* already gone */
     }
-    try {
-      this.proc?.kill('SIGKILL');
-    } catch {
-      /* already gone */
+    // Wait for the process to actually go before removing its profile. Chrome
+    // is still writing when SIGKILL lands, so an immediate recursive remove
+    // races it and throws ENOTEMPTY — which would fail the whole capture at
+    // the very end, after every shot had already succeeded.
+    await new Promise<void>((done) => {
+      if (!this.proc || this.proc.exitCode !== null) return done();
+      const timer = setTimeout(done, 3000);
+      this.proc.once('exit', () => {
+        clearTimeout(timer);
+        done();
+      });
+      try {
+        this.proc.kill('SIGKILL');
+      } catch {
+        clearTimeout(timer);
+        done();
+      }
+    });
+    for (let i = 0; i < 4; i++) {
+      try {
+        fs.rmSync(this.profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 60 });
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 120));
+      }
     }
-    fs.rmSync(this.profile, { recursive: true, force: true });
+    // A stray temp directory is not worth failing a successful capture over.
   }
 }

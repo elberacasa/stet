@@ -1,97 +1,197 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>stet — let it stand</title>
-<meta name="description" content="Your agents ask once. Your answer stands. A local verdict gate that turns your taste into rules any coding agent obeys.">
+<title>stet — your agents ask once, your answer stands</title>
+<meta name="description" content="Coding agents guess at forks with no right answer. stet refuses the write, asks you once, and makes your verdict binding on every agent that touches the repo. Local, zero dependencies, no keys.">
 <style>
-  *{box-sizing:border-box}
-  :root{
-    --bg:#14151a; --panel:#1b1d24; --line:#2b2e38; --line2:#3a3e4a;
-    --ink:#d8d2c4; --dim:#8d8677; --faint:#5f5c52;
-    --warm:#e79a5e; --cool:#79c2b2;
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Monaco,monospace;
-    --step:28px;
-  }
-  html,body{margin:0;background:var(--bg)}
-  body{color:var(--ink);font:14px/1.62 var(--mono);-webkit-font-smoothing:antialiased}
-  a{color:var(--warm);text-decoration:none}
-  a:hover{text-decoration:underline}
-  .wrap{max-width:940px;margin:0 auto;padding:0 var(--step)}
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#14151a; --bg-2:#111217; --panel:#1b1d24; --panel-2:#20232b;
+  --line:#2b2e38; --line-2:#3a3e4a;
+  --ink:#d8d2c4; --dim:#8d8677; --faint:#5f5c52;
+  --warm:#e79a5e; --cool:#79c2b2; --fail:#d9564f;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --serif:ui-serif,Georgia,"Iowan Old Style","Palatino Linotype",serif;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--ink);font:14px/1.62 var(--mono);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  background-image:radial-gradient(rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:26px 26px;
+}
+a{color:var(--warm);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:0 30px}
 
-  /* the signature: tiny letterspaced label with a hairline under it */
-  .label{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--cool);
-    border-bottom:1px solid var(--line);padding-bottom:7px;margin:0 0 22px;
-    display:flex;justify-content:space-between;align-items:baseline;gap:16px}
-  .label span{color:var(--faint);letter-spacing:.16em}
+/* the signature: tiny letterspaced label, one accent, hairline under */
+.label{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--cool);
+  margin-bottom:20px;display:flex;align-items:baseline;gap:10px}
+.label::before{content:'>';color:var(--faint)}
+.label::after{content:'_';color:var(--faint);animation:blink 1.4s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
 
-  header{border-bottom:1px solid var(--line)}
-  header .wrap{padding-top:18px;padding-bottom:18px;display:flex;
-    justify-content:space-between;align-items:center;gap:20px}
-  .mark{color:var(--warm);letter-spacing:.22em;font-weight:600}
-  header nav{display:flex;gap:22px;font-size:12px}
-  header nav a{color:var(--faint)}
-  header nav a:hover{color:var(--ink);text-decoration:none}
+h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.015em;line-height:1.14}
+h1{font-size:clamp(34px,5.4vw,60px)}
+h2{font-size:clamp(26px,3.6vw,42px);max-width:22ch}
+h1 em,h2 em{font-style:italic;color:var(--warm)}
+h2 .c{font-style:italic;color:var(--cool)}
+.body{color:var(--dim);max-width:64ch;margin-top:18px;font-size:13.5px}
 
-  /* Rule 1 — the refusal is the hero. The explanation comes after it. */
-  .hero{padding:56px 0 8px}
-  .deny{background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--warm);
-    border-radius:5px;padding:22px 24px;font-size:13px;line-height:1.7;color:var(--dim);
-    white-space:pre-wrap;margin:0 0 30px;overflow-x:auto}
-  .deny b{color:var(--warm);font-weight:400}
-  .deny i{color:var(--ink);font-style:normal}
-  h1{font:inherit;font-size:24px;line-height:1.42;margin:0 0 16px;max-width:46ch}
-  h1 em{font-style:normal;color:var(--warm)}
-  .sub{color:var(--dim);max-width:62ch;margin:0 0 28px;font-size:13px}
-  .cmd{display:inline-flex;gap:10px;align-items:baseline;border:1px solid var(--line);
-    background:var(--panel);border-radius:5px;padding:13px 18px;color:var(--cool)}
-  .cmd span{color:var(--faint)}
-  .free{color:var(--faint);font-size:12px;margin:14px 0 0}
+nav{position:sticky;top:0;z-index:60;background:rgba(20,21,26,.84);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:26px;height:56px}
+.brand{color:var(--warm);letter-spacing:.22em;font-weight:600;font-size:15px}
+nav .links{display:flex;gap:20px;font-size:12px;margin-left:6px}
+nav .links a{color:var(--faint)}
+nav .links a:hover{color:var(--ink);text-decoration:none}
+nav .sp{flex:1}
+.pill{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;
+  padding:5px 13px;background:var(--panel)}
+.pill:hover{border-color:var(--warm);color:var(--warm);text-decoration:none}
 
-  .rail{border-top:1px solid var(--line);margin-top:52px;padding:26px 0 0;
-    display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
-  .rail div{font-size:12.5px;color:var(--faint);line-height:1.65}
-  .rail b{display:block;color:var(--cool);font-size:11px;letter-spacing:.2em;
-    text-transform:uppercase;margin-bottom:8px;font-weight:400}
+/* ── hero: rule 1 of this repo's canon — lead with the refusal ─────────── */
+header.hero{position:relative;padding:78px 0 66px;overflow:hidden}
+.deny{background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--warm);
+  border-radius:6px;padding:22px 24px;font-size:13px;line-height:1.72;color:var(--dim);
+  white-space:pre-wrap;max-width:720px;overflow-x:auto;
+  box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.deny b{color:var(--warm);font-weight:400}
+.deny i{color:var(--ink);font-style:normal}
+.hero h1{margin:30px 0 18px;max-width:19ch}
+.hero .body{margin-bottom:30px}
+.ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.cmd{font:inherit;font-size:14px;background:#0d0e12;color:var(--cool);border:1px solid var(--line-2);
+  padding:13px 20px;border-radius:7px;display:inline-flex;gap:11px;align-items:center;cursor:pointer}
+.cmd .p{color:var(--warm)}
+.cmd .hint{color:var(--faint);font-size:11px}
+.cmd:hover{border-color:var(--cool)}
+.free{color:var(--faint);font-size:12px;margin-top:16px}
 
-  section{padding:64px 0}
-  section + section{border-top:1px solid var(--line)}
-  .loop{display:grid;grid-template-columns:auto 1fr;gap:0 20px;font-size:13px}
-  .loop dt{color:var(--warm);padding:9px 0}
-  .loop dd{margin:0;padding:9px 0;color:var(--dim);border-bottom:1px solid var(--line)}
-  .loop dt{border-bottom:1px solid var(--line)}
-  .loop dt:last-of-type,.loop dd:last-of-type{border-bottom:none}
+/* floating rule cards */
+.float{position:absolute;width:270px;background:var(--panel);border:1px solid var(--line);
+  border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45);z-index:1;
+  transition:transform .3s ease,border-color .3s ease}
+.float:hover{transform:translateY(-4px) rotate(0)!important;border-color:var(--line-2)}
+.float .top{display:flex;gap:9px;align-items:center;padding:8px 12px;
+  border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--faint)}
+.float .n{color:var(--warm);letter-spacing:0}
+.float .b{padding:12px 14px;font-size:12px;line-height:1.6;color:var(--ink)}
+.float .f{padding:0 14px 11px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+/* positioned against the full-bleed hero, so these must stay positive or they
+   sit outside the viewport and get sliced mid-sentence */
+.f1{top:6%;right:34px;transform:rotate(2deg)}
+.f2{top:40%;right:78px;transform:rotate(-1.5deg);opacity:.94}
+.f3{bottom:7%;right:44px;transform:rotate(1.5deg);opacity:.88}
+@media(max-width:1280px){.float{display:none}}
 
-  table{border-collapse:collapse;width:100%;font-size:12.5px}
-  th,td{text-align:left;padding:9px 14px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--cool);font-weight:400;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
-  td{color:var(--dim)}
-  td b{color:var(--ink);font-weight:400}
+section{padding:92px 0;border-top:1px solid var(--line)}
+section.tint{background:var(--bg-2)}
 
-  footer{border-top:1px solid var(--line);padding:26px 0 60px;color:var(--faint);font-size:12px;
-    display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+/* ── the fork ─────────────────────────────────────────────────────────── */
+.forks{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:44px}
+@media(max-width:760px){.forks{grid-template-columns:1fr}}
+.fork{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:22px}
+.fork h3{font:inherit;font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:400}
+.fork p{color:var(--faint);font-size:12.5px;line-height:1.65}
+.fork .tagx{display:inline-block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  border:1px solid var(--line-2);border-radius:4px;padding:2px 8px;margin-bottom:12px;color:var(--fail)}
+.fork.ok .tagx{color:var(--cool)}
 
-  @media (max-width:720px){
-    :root{--step:20px}
-    .rail{grid-template-columns:1fr;gap:22px}
-    h1{font-size:20px}
-    .deny{font-size:12px;padding:18px}
-    section{padding:44px 0}
-  }
+figure{margin:52px 0 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{color:var(--faint);font-size:12px;margin-top:16px;max-width:74ch}
+figcaption b{color:var(--dim);font-weight:400}
+
+/* ── stats ────────────────────────────────────────────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px}
+@media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:24px 20px}
+.stat .num{font-family:var(--serif);font-size:36px;color:var(--warm);line-height:1}
+.stat .num small{font-size:15px;color:var(--dim)}
+.stat .lbl{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.55}
+
+.term{background:#0d0e12;border:1px solid var(--line);border-radius:9px;overflow:hidden;
+  margin-top:44px;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.term .top{display:flex;gap:8px;align-items:center;padding:9px 13px;background:#15161c;
+  border-bottom:1px solid var(--line);font-size:11px;color:var(--faint)}
+.term .top i{width:8px;height:8px;border-radius:50%;display:block;background:var(--line-2)}
+.term pre{padding:20px 22px;font-size:12.5px;line-height:1.72;color:var(--dim);overflow-x:auto}
+.term .w{color:var(--warm)}
+.term .g{color:var(--cool)}
+.term .d{color:var(--faint)}
+.term .i{color:var(--ink)}
+
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:40px}
+th,td{text-align:left;padding:11px 16px 11px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--cool);font-weight:400;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+td{color:var(--dim)}
+td b{color:var(--ink);font-weight:400}
+td.n{color:var(--warm);white-space:nowrap}
+
+footer{border-top:1px solid var(--line);padding:70px 0 64px;text-align:center}
+.bigcmd{font-size:clamp(16px,2.6vw,24px);background:#0d0e12;color:var(--cool);
+  border:1px solid var(--line-2);padding:17px 30px;border-radius:9px;display:inline-block}
+.bigcmd .p{color:var(--warm)}
+.flinks{display:flex;gap:24px;justify-content:center;margin-top:34px;font-size:12px;flex-wrap:wrap}
+.flinks a{color:var(--dim)}
+.tiny{font-size:11px;color:var(--faint);margin-top:24px}
+
+@keyframes dashflow{to{stroke-dashoffset:-20}}
+.flow{animation:dashflow 1.5s linear infinite}
+.flow-slow{animation:dashflow 3.4s linear infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@media(max-width:820px){nav .links{display:none}}
+@media(max-width:640px){
+  section{padding:60px 0}
+  header.hero{padding:52px 0 44px}
+  .wrap{padding:0 20px}
+  .deny{font-size:11.5px;padding:16px 18px}
+  .stats{gap:12px}
+  .stat{padding:18px 16px}
+  .stat .num{font-size:30px}
+  table{font-size:12px}
+  th,td{padding:9px 10px 9px 0}
+}
 </style>
+</head>
+<body>
 
-<header><div class="wrap">
-  <span class="mark">stet</span>
-  <nav>
-    <a href="#how">how it works</a>
-    <a href="https://github.com/elberacasa/stet">github</a>
-    <a href="https://www.npmjs.com/package/stetmark">npm</a>
-  </nav>
-</div></header>
+<nav><div class="wrap">
+  <span class="brand">stet</span>
+  <div class="links">
+    <a href="#problem">Problem</a>
+    <a href="#insight">The insight</a>
+    <a href="#gate">The gate</a>
+    <a href="#numbers">Numbers</a>
+  </div>
+  <div class="sp"></div>
+  <a class="pill" href="https://github.com/elberacasa/stet">★ github</a>
+</div></nav>
 
-<div class="wrap">
-  <section class="hero">
-    <div class="deny"><b>stet: this path is governed by a decision the human has not made yet.</b>
+<!-- ═══ HERO — rule 1: lead with the refusal ═══ -->
+<header class="hero"><div class="wrap">
+
+  <div class="float f1">
+    <div class="top"><span class="n">rule 7</span> · earned from hero-lead</div>
+    <div class="b">Lead with the refusal, not the promise.</div>
+    <div class="f">design · copy</div>
+  </div>
+  <div class="float f2">
+    <div class="top"><span class="n">rule 12</span> · earned from api-shape</div>
+    <div class="b">List endpoints return a bare array; pagination goes in Link headers.</div>
+    <div class="f">api → src/api/**</div>
+  </div>
+  <div class="float f3">
+    <div class="top"><span class="n">rule 19</span> · from a correction</div>
+    <div class="b">Empty states keep the table headers so the screen teaches its own shape.</div>
+    <div class="f">design</div>
+  </div>
+
+  <div class="deny"><b>stet: this path is governed by a decision the human has not made yet.</b>
 
   <i>api-shape</i> — "Which shape should the list endpoint return?"
   claims: src/api/**
@@ -100,57 +200,280 @@ Do not implement either option yet — whichever you pick has a 50% chance
 of being thrown away. Either work somewhere else, or block on the verdict with:
   stet await api-shape</div>
 
-    <h1>That is a coding agent being stopped mid-write, because
-      <em>you had not decided yet.</em></h1>
-    <p class="sub">Agents hit forks with no right answer — which type, which copy, how much
-      abstraction — and they guess, because they are trained to finish. stet refuses the
-      write, asks you once, and makes your verdict binding on every agent that touches the
-      repo from then on.</p>
+  <h1>That is an agent<br>being stopped mid-write,<br>because <em>you had not decided.</em></h1>
 
-    <div class="cmd">npx stetmark <span># in any repo</span></div>
-    <p class="free">Zero runtime dependencies. Nothing leaves your machine. No account, no key, no network.</p>
+  <p class="body">Agents hit forks with no right answer — which type, which copy, how much
+  abstraction — and they guess, because they are trained to finish. stet refuses the write,
+  asks you once, and makes your verdict binding on every agent that touches the repo.</p>
 
-    <div class="rail">
-      <div><b>blind</b>Labels are shuffled against what the variants really are, so you judge the work and not the approach you already favour.</div>
-      <div><b>binding</b>Your one line becomes a rule, injected into AGENTS.md, CLAUDE.md, .cursorrules — and, in Claude Code, into the hook that refuses the write.</div>
-      <div><b>free</b>The artifacts never enter the model's context. You look at them in a browser, so the comparison costs no tokens.</div>
+  <div class="ctas">
+    <button class="cmd" id="copy" type="button"><span class="p">$</span> npx stetmark <span class="hint" id="hint">⧉ copy</span></button>
+    <a class="pill" href="https://github.com/elberacasa/stet">★ Star on GitHub</a>
+  </div>
+  <p class="free">Zero runtime dependencies · nothing leaves your machine · no account, no key, no network</p>
+</div></header>
+
+<!-- ═══ PROBLEM ═══ -->
+<section id="problem"><div class="wrap">
+  <div class="label">the problem</div>
+  <h2>Human judgment <em>doesn't compound.</em></h2>
+  <p class="body">A coding agent hits two kinds of fork. The first has a right answer somewhere
+  in the repository — does it compile, does it pass, does it match the existing pattern. Agents
+  are good at those and should never interrupt you. The second has no right answer anywhere,
+  only a preference. And there, both available outcomes are bad.</p>
+
+  <div class="forks">
+    <div class="fork">
+      <span class="tagx">it guesses</span>
+      <h3>You find out three hours later that you hate it.</h3>
+      <p>A wrong guess costs a full build cycle plus a full rework cycle — thousands of tokens
+      and your attention. The agent had a fifty-fifty shot and no way to know which side you
+      were on.</p>
     </div>
-  </section>
+    <div class="fork">
+      <span class="tagx">it asks in chat</span>
+      <h3>You answer, and the answer dies with the session.</h3>
+      <p>Next week a different agent asks the same question and you answer it again, slightly
+      differently, forever. Nothing you decided is written anywhere an agent will read.</p>
+    </div>
+  </div>
+</div></section>
 
-  <section id="how">
-    <div class="label">the loop <span>one command, any repo</span></div>
-    <dl class="loop">
-      <dt>1</dt><dd>An agent hits a fork it cannot derive and runs <b>stet ask</b>. It writes a small file, blocks on a file watch, and burns nothing while it waits.</dd>
-      <dt>2</dt><dd>You get a notification. Whenever you feel like it, you open a page showing the real thing — matched captures, live pages, audio, whatever the choice is made of.</dd>
-      <dt>3</dt><dd>You pick, blind, and say why. Committing reveals what A and B actually were — and that is the first moment you can write a rule worth obeying.</dd>
-      <dt>4</dt><dd>The rule lands in your canon and syncs into every agent instruction surface in the repo. The agent unblocks and continues with your answer.</dd>
-      <dt>5</dt><dd>Next week a different agent, on a different machine, obeys it without asking.</dd>
-    </dl>
-  </section>
+<!-- ═══ INSIGHT ═══ -->
+<section id="insight" class="tint"><div class="wrap">
+  <div class="label">the insight</div>
+  <h2>Written from the <span class="c">other side</span> of the tool call.</h2>
+  <p class="body">stet was not designed by watching agents work. It was designed by one, with
+  access to how the loop actually behaves — and that changes what you build. Two things are
+  obvious from inside and invisible from outside.</p>
 
-  <section>
-    <div class="label">why it is cheaper, not slower</div>
-    <table>
-      <tr><th>claim</th><th>measured</th></tr>
-      <tr><td><b>A waiting agent burns nothing.</b> <code>stet await</code> sleeps on a file watch rather than polling.</td>
-          <td>17.08s blocked on <b>0.09s</b> of CPU, and the counter did not move while waiting.</td></tr>
-      <tr><td><b>Rules arrive when they apply</b>, not all at once at session start.</td>
-          <td>A 40-rule canon: 1046 always-resident tokens → <b>538</b> delivered just in time, 20 rules never sent.</td></tr>
-      <tr><td><b>The canon stays small.</b> A hard budget holds rules back rather than truncating silently.</td>
-          <td>1 rule = <b>65</b> tokens. 40 rules = <b>971</b>, measured with a real BPE tokenizer.</td></tr>
-      <tr><td><b>The gate costs nothing to run.</b> It sits in a hook on every write.</td>
-          <td><b>50ms</b> per invocation; 1.3ms to decide after 1500 files; 5.0ms against 1200 rules.</td></tr>
-    </table>
-  </section>
+  <figure>
+    <svg viewBox="0 0 1060 340" role="img" aria-label="An instruction's influence decays across a session, while a system reminder arrives at full strength at the moment it is needed">
+      <defs>
+        <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#e79a5e" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#e79a5e" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <!-- axes -->
+      <line x1="70" y1="270" x2="1010" y2="270" stroke="#2b2e38" stroke-width="1"/>
+      <line x1="70" y1="40" x2="70" y2="270" stroke="#2b2e38" stroke-width="1"/>
+      <text x="70" y="300" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52">turn 0</text>
+      <text x="540" y="300" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52" text-anchor="middle">turn 30</text>
+      <text x="1010" y="300" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52" text-anchor="end">turn 60</text>
+      <text x="30" y="60" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52">high</text>
+      <text x="30" y="266" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52">low</text>
+      <text x="18" y="165" font-family="ui-monospace,monospace" font-size="10" fill="#5f5c52" transform="rotate(-90 18 165)" text-anchor="middle">influence</text>
 
-  <section>
-    <div class="label">what it is not</div>
-    <p class="sub">Not an agent orchestrator. Not a dashboard. Not traffic-based A/B testing. Not a
-      hosted service, an account, or telemetry. It is a gate, and anything can feed it.</p>
-  </section>
-</div>
+      <!-- decay curve: a rule read once at session start -->
+      <path d="M70 62 C 220 96, 330 168, 470 205 S 760 250, 1010 261" fill="none"
+            stroke="#e79a5e" stroke-width="2.5"/>
+      <path d="M70 62 C 220 96, 330 168, 470 205 S 760 250, 1010 261 L1010 270 L70 270 Z" fill="url(#fade)"/>
+      <circle cx="70" cy="62" r="4" fill="#e79a5e"/>
+      <text x="86" y="52" font-family="ui-monospace,monospace" font-size="12" fill="#e79a5e">a rule in AGENTS.md — read once, then competing with everything after it</text>
 
-<footer><div class="wrap" style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:0">
-  <span>stet — Latin, <i>let it stand</i>. The proofreader's mark.</span>
-  <span>MIT · <a href="https://github.com/elberacasa/stet">github.com/elberacasa/stet</a></span>
+      <!-- compaction -->
+      <line x1="700" y1="40" x2="700" y2="270" stroke="#d9564f" stroke-width="1" stroke-dasharray="4 5" opacity=".8"/>
+      <text x="708" y="56" font-family="ui-monospace,monospace" font-size="11" fill="#d9564f">compaction</text>
+      <text x="708" y="72" font-family="ui-monospace,monospace" font-size="10" fill="#8d8677">the conversation is summarised;</text>
+      <text x="708" y="86" font-family="ui-monospace,monospace" font-size="10" fill="#8d8677">preferences go with it</text>
+
+      <!-- the system reminder spike, at the moment of use -->
+      <line x1="470" y1="270" x2="470" y2="78" stroke="#79c2b2" stroke-width="2.5"/>
+      <circle cx="470" cy="78" r="4" fill="#79c2b2"/>
+      <line x1="470" y1="270" x2="470" y2="290" stroke="#79c2b2" stroke-width="1"/>
+      <text x="470" y="312" font-family="ui-monospace,monospace" font-size="11" fill="#79c2b2" text-anchor="middle">you write src/api/users.ts</text>
+      <text x="482" y="106" font-family="ui-monospace,monospace" font-size="12" fill="#79c2b2">the same rule, delivered here instead</text>
+      <text x="482" y="124" font-family="ui-monospace,monospace" font-size="11" fill="#8d8677">arrives at full strength, immediately before the decision</text>
+
+      <!-- post-compact restate -->
+      <line x1="820" y1="270" x2="820" y2="150" stroke="#79c2b2" stroke-width="2" stroke-dasharray="3 4" class="flow-slow"/>
+      <circle cx="820" cy="150" r="3.5" fill="#79c2b2"/>
+      <text x="832" y="146" font-family="ui-monospace,monospace" font-size="10.5" fill="#8d8677">restated after compaction</text>
+    </svg>
+    <figcaption><b>Where a rule lives decides whether it survives.</b> An instruction placed at
+    the top of a session competes with every token that arrives after it, and compaction can
+    summarise it away entirely. A system reminder does not decay — it is delivered immediately
+    before the model request that needs it. stet puts your rules there. <i>Curve illustrative;
+    the placement and the compaction behaviour are not.</i></figcaption>
+  </figure>
+
+  <div class="forks" style="margin-top:56px">
+    <div class="fork ok">
+      <span class="tagx">first</span>
+      <h3>An instruction can be ignored. A denied tool call cannot.</h3>
+      <p>An agent is trained to finish. Telling it to stop and ask competes with that and loses.
+      Refusing the write does not compete with anything — it is not a request. That is why stet
+      is a gate rather than a guideline.</p>
+    </div>
+    <div class="fork ok">
+      <span class="tagx">second</span>
+      <h3>Blind means you cannot write the rule yet.</h3>
+      <p>Labels are shuffled, so at the moment you commit you still do not know which approach
+      you chose. The reveal is the first instant a rule worth obeying can be written — so that
+      is where stet asks for it, not before.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ═══ GATE ═══ -->
+<section id="gate"><div class="wrap">
+  <div class="label">the gate</div>
+  <h2>One command wires it into <em>Claude Code.</em></h2>
+  <p class="body">stet writes into every agent instruction surface your repo has — AGENTS.md,
+  CLAUDE.md, .cursorrules, .windsurfrules — so any agent reads your canon. In Claude Code it
+  goes further and becomes enforcement, through five hooks that cost about 50ms each.</p>
+
+  <div class="term">
+    <div class="top"><i></i><i></i><i></i> ~/your-repo — stet claude</div>
+<pre><span class="w">stet</span> is now a gate in this repo, not a suggestion.
+
+<span class="g">PreToolUse   </span> <span class="d">denies writes into a path an undecided question claims,
+               and delivers the rules that govern that path</span>
+<span class="g">PostToolUse  </span> <span class="d">notes which instruction caused each write, to spot taste
+               being said out loud instead of written down</span>
+<span class="g">Stop         </span> <span class="d">at the end of a turn, names files you corrected repeatedly</span>
+<span class="g">SessionStart </span> <span class="d">states the canon once, at the top of the session</span>
+<span class="g">PostCompact  </span> <span class="d">states it again after compaction</span>
+
+<span class="d">written to .claude/settings.local.json</span>
+<span class="g">verified</span> <span class="d">against stet 0.10.0 — all 5 events implemented</span></pre>
+  </div>
+
+  <table>
+    <tr><th>it notices</th><th>what happens</th></tr>
+    <tr><td><b>A write into an undecided path</b></td><td>Refused, with the question handed back to the agent. It cannot build on an answer you have not given.</td></tr>
+    <tr><td><b>A rule that governs this file</b></td><td>Delivered as a system reminder at that moment — and never twice in one session.</td></tr>
+    <tr><td><b>The same file revised across three instructions</b></td><td>Named at the end of the turn. That is taste being negotiated out loud instead of recorded.</td></tr>
+    <tr><td><b>Compaction</b></td><td>The canon is restated, because that is exactly when preferences get summarised away.</td></tr>
+  </table>
+</div></section>
+
+<!-- ═══ NUMBERS ═══ -->
+<section id="numbers" class="tint"><div class="wrap">
+  <div class="label">the numbers</div>
+  <h2>Cheaper, <em>not slower.</em></h2>
+  <p class="body">Every figure below was measured, not estimated — token counts with a real BPE
+  tokenizer, CPU with <span style="color:var(--dim)">time(1)</span>, latency on the actual hook path.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">0.09<small>s</small></div><div class="lbl">CPU used by an agent blocked for 17.08 seconds. It sleeps on a file watch; it does not poll.</div></div>
+    <div class="stat"><div class="num">49<small>%</small></div><div class="lbl">fewer tokens delivering a 40-rule canon just in time instead of holding it resident all session.</div></div>
+    <div class="stat"><div class="num">65</div><div class="lbl">tokens for a one-rule injected block. Forty rules cost 971 — under a hard budget that never truncates silently.</div></div>
+    <div class="stat"><div class="num">50<small>ms</small></div><div class="lbl">per hook invocation, on every tool call. 1.3ms to decide after 1500 files; 5.0ms against 1200 rules.</div></div>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1060 250" role="img" aria-label="A 40-rule canon costs 1046 resident tokens, or 538 delivered just in time, of which 20 rules are never sent">
+      <text x="0" y="26" font-family="ui-monospace,monospace" font-size="12" fill="#8d8677">a 40-rule canon, in a session that touches two of six areas</text>
+
+      <!-- resident -->
+      <text x="0" y="76" font-family="ui-monospace,monospace" font-size="12" fill="#5f5c52">always resident</text>
+      <rect x="0" y="88" width="1000" height="34" rx="4" fill="#e79a5e" fill-opacity=".22" stroke="#e79a5e" stroke-width="1.5"/>
+      <text x="16" y="110" font-family="ui-monospace,monospace" font-size="13" fill="#e79a5e">all 40 rules, every session, whether they apply or not</text>
+      <text x="1010" y="110" font-family="ui-monospace,monospace" font-size="14" fill="#e79a5e" text-anchor="end">1046</text>
+
+      <!-- jit -->
+      <text x="0" y="164" font-family="ui-monospace,monospace" font-size="12" fill="#5f5c52">just in time</text>
+      <rect x="0" y="176" width="514" height="34" rx="4" fill="#79c2b2" fill-opacity=".2" stroke="#79c2b2" stroke-width="1.5"/>
+      <text x="16" y="198" font-family="ui-monospace,monospace" font-size="13" fill="#79c2b2">only what governs the files actually touched</text>
+      <text x="524" y="198" font-family="ui-monospace,monospace" font-size="14" fill="#79c2b2">538</text>
+      <rect x="514" y="176" width="486" height="34" rx="4" fill="none" stroke="#2b2e38" stroke-width="1.5" stroke-dasharray="4 5" class="flow"/>
+      <text x="756" y="198" font-family="ui-monospace,monospace" font-size="12" fill="#5f5c52" text-anchor="middle">20 rules never sent at all</text>
+      <text x="0" y="240" font-family="ui-monospace,monospace" font-size="11" fill="#5f5c52">tokens, measured with gpt-tokenizer</text>
+    </svg>
+    <figcaption><b>Two honest caveats.</b> Resident context is prompt-cached, so the cost saving
+    is smaller than the token saving. And the real win is placement rather than size — a reminder
+    immediately before the decision beats a preamble sixty turns behind it.</figcaption>
+  </figure>
+</div></section>
+
+<!-- ═══ LOOP ═══ -->
+<section><div class="wrap">
+  <div class="label">the loop</div>
+  <h2>Ask once. <em>Let it stand.</em></h2>
+
+  <figure>
+    <svg viewBox="0 0 1060 210" role="img" aria-label="The loop: an agent asks, you judge blind, the reveal lands, a rule binds every future agent">
+      <g font-family="ui-monospace,monospace" font-size="11.5">
+        <!-- nodes -->
+        <g>
+          <rect x="0" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
+          <text x="16" y="86" fill="#e79a5e">1 · the agent asks</text>
+          <text x="16" y="106" fill="#8d8677">stet ask &lt; item.json</text>
+          <text x="16" y="122" fill="#5f5c52">then blocks, burning nothing</text>
+        </g>
+        <g>
+          <rect x="220" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
+          <text x="236" y="86" fill="#e79a5e">2 · you judge</text>
+          <text x="236" y="106" fill="#8d8677">side by side, or press S</text>
+          <text x="236" y="122" fill="#5f5c52">to flip them in one frame</text>
+        </g>
+        <g>
+          <rect x="440" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
+          <text x="456" y="86" fill="#e79a5e">3 · the reveal</text>
+          <text x="456" y="106" fill="#8d8677">what A and B really were</text>
+          <text x="456" y="122" fill="#5f5c52">now you can write the rule</text>
+        </g>
+        <g>
+          <rect x="660" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
+          <text x="676" y="86" fill="#e79a5e">4 · it binds</text>
+          <text x="676" y="106" fill="#8d8677">AGENTS.md · CLAUDE.md</text>
+          <text x="676" y="122" fill="#5f5c52">.cursorrules · the gate</text>
+        </g>
+        <g>
+          <rect x="880" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#79c2b2"/>
+          <text x="896" y="86" fill="#79c2b2">5 · next week</text>
+          <text x="896" y="106" fill="#8d8677">a different agent obeys</text>
+          <text x="896" y="122" fill="#5f5c52">without asking you again</text>
+        </g>
+        <!-- connectors -->
+        <g stroke="#3a3e4a" stroke-width="1.5" stroke-dasharray="4 5" class="flow">
+          <line x1="182" y1="98" x2="218" y2="98"/>
+          <line x1="402" y1="98" x2="438" y2="98"/>
+          <line x1="622" y1="98" x2="658" y2="98"/>
+          <line x1="842" y1="98" x2="878" y2="98"/>
+        </g>
+        <!-- return arc -->
+        <path d="M970 140 C 970 190, 90 190, 90 140" fill="none" stroke="#79c2b2" stroke-width="1.5"
+              stroke-dasharray="3 5" class="flow-slow" opacity=".7"/>
+        <text x="530" y="184" fill="#5f5c52" text-anchor="middle">and the canon grows by one</text>
+      </g>
+    </svg>
+  </figure>
+</div></section>
+
+<!-- ═══ NOT ═══ -->
+<section class="tint"><div class="wrap">
+  <div class="label">what it is not</div>
+  <h2>A gate. <span class="c">Anything can feed it.</span></h2>
+  <p class="body">Not an agent orchestrator. Not a dashboard. Not traffic-based A/B testing.
+  Not a hosted service, an account, or telemetry. It runs on your machine, decides nothing for
+  you, and records only what you actually said.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <div class="bigcmd"><span class="p">$</span> npx stetmark</div>
+  <div class="flinks">
+    <a href="https://github.com/elberacasa/stet">github</a>
+    <a href="https://www.npmjs.com/package/stetmark">npm</a>
+    <a href="https://github.com/elberacasa/stet/blob/main/showcase/JOURNAL.md">the build journal</a>
+    <a href="https://github.com/elberacasa/stet/blob/main/README.md">docs</a>
+  </div>
+  <p class="tiny">stet — Latin, <i>let it stand</i>. The proofreader's mark: an editor proposes a
+  change, and the author writes stet in the margin to overrule it.</p>
+  <p class="tiny">MIT · zero dependencies · fully local · built by <a href="https://github.com/elberacasa">elberacasa</a></p>
 </div></footer>
+
+<script>
+  document.getElementById('copy').addEventListener('click', function () {
+    navigator.clipboard.writeText('npx stetmark').then(function () {
+      var h = document.getElementById('hint');
+      h.textContent = '✓ copied';
+      h.style.color = '#79c2b2';
+      setTimeout(function () { h.textContent = '⧉ copy'; h.style.color = ''; }, 1600);
+    });
+  });
+</script>
+</body>
+</html>

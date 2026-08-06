@@ -195,6 +195,49 @@ would have entered the canon as fact.
 
 ---
 
+## The landing page, built with the tool it advertises
+
+Rebuilt taking the devices from Umbra's page — `> SECTION_` labels, floating
+cards, a real terminal, SVG figures with flowing dashes, a big-number strip —
+in stet's own dark palette, with a serif for the headlines so it does not read
+as another mono dev-tool page. The system serif stack, not a webfont: a page
+whose pitch is "no network" should not fetch one.
+
+Every figure on it is a number this project actually measured. The one curve
+that is not measured says so in its own caption.
+
+`stet capture` then checked its own advertisement at four widths, and the
+verification earned its place twice in ten minutes.
+
+### Finding 8 — the emulation was realistic and therefore wrong
+
+The first pass reported `laid out at 476px, not 390`. Capture was setting
+`mobile: true`, which is realistic — and realistic means Chrome shrink-to-fits
+when content overflows, so the page laid out at 476 and the capture was not
+"this page at 390px" at all.
+
+A matched view has to mean exactly the width it claims, so emulation is now
+`mobile: false`. `innerWidth` is then always the requested width, and overflow
+shows up as overflow rather than being silently zoomed away. Realistic was the
+wrong goal; comparable was the right one.
+
+### Finding 9 — the nav overflowed, and the page said so before I looked
+
+With the viewport honest, `innerWidth` was 390 while the document was 475. The
+offender was the nav: brand, four links and a pill do not fit in 390px. Hidden
+below 820px, along with a set of small-screen adjustments — found by the tool
+the page is advertising, before the page was ever published.
+
+### Finding 10 — cleanup that failed after everything succeeded
+
+`Chrome.close()` removed the temp profile immediately after `SIGKILL`, which
+races Chrome still writing to it: `ENOTEMPTY`, thrown at the very end, failing
+a capture in which every single shot had already worked. It now waits for the
+process to actually exit, retries, and treats a stray temp directory as not
+worth failing over.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -212,6 +255,9 @@ Not one of these was visible from reading the code.
 | 9 | this showcase | a glob relative to the wrong root matched nothing and gated nothing, silently |
 | 10 | two real verdicts | the sharpen step made keeping a useless rule the cheapest action |
 | 11 | looking at a capture | `--window-size` cropped instead of reflowing: right dimensions, wrong picture, every signal green |
+| 12 | capturing the landing page | mobile emulation shrink-to-fit made a 390px view lay out at 476px |
+| 13 | the same capture | the nav overflowed at 390px — caught by the tool the page advertises |
+| 14 | the same capture | profile cleanup raced Chrome's exit and failed a capture after every shot succeeded |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported
