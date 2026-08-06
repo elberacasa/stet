@@ -139,6 +139,41 @@ export function problems(input: unknown, opts: { from?: string } = {}): string[]
       }
     });
 
+    // Found the first time a stranger's agent queued a real decision. It
+    // shuffled correctly, the map was withheld correctly — and variant A read
+    // "Warm apricot #D98E63 (current)" while the question said "I picked warm
+    // apricot". Every mechanism for keeping the judgement honest was defeated
+    // by a parenthesis. The label shuffle protects against ordering; nothing
+    // protected against a variant announcing itself.
+    // Deliberately narrow. A bare "currently" or "now" is ordinary product
+    // copy — "Buy now" is this project's own worked example — so only the
+    // parenthesised annotation and an explicit first-person claim count. A
+    // check that fires on real copy is one people learn to route around.
+    const TELL = /\((?:current|existing|default|mine|recommended|preferred|original|unchanged|as[- ]is|no change)\)|\b(?:my (?:pick|choice|preference|recommendation)|i (?:picked|chose|prefer|recommend|went with)|i'd go with)\b/i;
+    variants.forEach((v, i) => {
+      const variant = v as unknown as Record<string, unknown>;
+      if (!Array.isArray(variant.blocks)) return;
+      for (const b of variant.blocks) {
+        const block = b as unknown as Record<string, unknown>;
+        for (const f of ['text', 'title'] as const) {
+          const val = block[f];
+          if (typeof val === 'string' && TELL.test(val)) {
+            out.push(
+              `variants[${i}] says ${JSON.stringify(TELL.exec(val)?.[0])} — that tells the human which one is yours, ` +
+                'and the whole point is that they cannot tell. Say what the option is, not where it came from.',
+            );
+            return;
+          }
+        }
+      }
+    });
+    if (isStr(item.question) && TELL.test(item.question)) {
+      out.push(
+        `"question" says ${JSON.stringify(TELL.exec(item.question)?.[0])} — it names your own pick, ` +
+          'which is the one thing the human must not know while choosing. Put it in "map" instead; they see it after.',
+      );
+    }
+
     // The map is what the human is told after they choose. Without it the
     // reveal is empty and the blind test has nothing to reveal, which is the
     // entire point of the exercise.

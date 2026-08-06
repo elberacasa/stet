@@ -972,3 +972,43 @@ describe('telling people when the gate starts working', () => {
     expect(plain(run(['status']).stdout)).not.toMatch(/no hook has ever been called/);
   });
 });
+
+// ── a decision that announces its own answer ───────────────────────────────
+// Found the first time a stranger's agent queued a real decision, in a fresh
+// project. Labels shuffled correctly, map withheld correctly — and variant A
+// read "Warm apricot #D98E63 (current)" while the question said "I picked warm
+// apricot". Every mechanism for keeping the judgement honest was defeated by a
+// parenthesis.
+describe('the blind test, defeated by its own content', () => {
+  const item = (question: string, texts: string[]) => ({
+    id: 'x', question,
+    map: Object.fromEntries(texts.map((t, i) => [String.fromCharCode(65 + i), `v${i}`])),
+    variants: texts.map((t, i) => ({ label: String.fromCharCode(65 + i), blocks: [{ kind: 'text', text: t }] })),
+  });
+  const tell = (it: unknown) => problems(it).filter((p) => /tells the human|names your own/.test(p));
+
+  it('refuses a variant that marks itself as the current one', () => {
+    expect(tell(item('Which accent?', ['Apricot (current)', 'Blue']))).toHaveLength(1);
+    expect(tell(item('Which?', ['Apricot (existing)', 'Blue']))).toHaveLength(1);
+  });
+
+  it('refuses a question that names the agent\'s own pick', () => {
+    expect(tell(item('I picked apricot. Which do you want?', ['Apricot', 'Blue']))).toHaveLength(1);
+  });
+
+  it('refuses a variant that claims to be the recommendation', () => {
+    expect(tell(item('Which?', ['Apricot — my pick', 'Blue']))).toHaveLength(1);
+  });
+
+  it('does not fire on ordinary product copy', () => {
+    // "Buy now" is this project's own worked example; a bare "currently" or
+    // "now" is what real interface copy says. A check that fires on real copy
+    // is one people learn to route around.
+    for (const it of [
+      item('Which label?', ['Buy now', 'Get started']),
+      item('Which error copy?', ['Your payment is currently processing', 'We could not take that payment']),
+      item('Which empty state?', ['Nothing here yet', 'Start your first project now']),
+      item('Which palette?', ['Original Bauhaus red', 'Muted brick']),
+    ]) expect(tell(it), JSON.stringify(it.variants[0])).toHaveLength(0);
+  });
+});

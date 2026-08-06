@@ -1931,6 +1931,99 @@ the package.
 
 ---
 
+## The first real test: a stranger's project, a fresh agent, no mention of stet
+
+Fifty findings in, the question was whether any of this helps build something
+that is not stet. So: a new folder, `stet init`, `stet claude`, and a prompt for
+a focus timer that never mentions stet. The prompt deliberately closed off the
+easy escape — *"Don't ask me a pile of questions up front — build it and show
+me."*
+
+I predicted, on the record, that it would not ask and would guess.
+
+**It asked.** Seventeen minutes of work, and at the end:
+
+> *I filed the background-tab constraint I hit as a stet note, and queued one
+> stet ask on the accent colour.*
+
+Both verified against the artifacts rather than taken on the agent's word.
+
+### The note is exactly what the feature is for
+
+> The fuse ticks deliberately have NO css transitions. Chrome freezes css
+> animation/transition timelines in an occluded or unfocused tab, and this timer
+> is designed to sit in a background tab — a tick caught mid-transition strands
+> at the wrong colour and the fuse reads as a lie.
+
+Discovered the hard way, mid-session, after the agent measured rather than
+guessed. Scoped to the file. It explains *why the code looks strange*, which is
+the single most expensive thing to rediscover. Nobody prompted this; the feature
+was named once, at session start, in the hook.
+
+### Finding 52 — the blind test, defeated by a parenthesis
+
+The decision it queued:
+
+```
+question: "The accent colour — I picked warm apricot (#D98E63) for a
+           low-arousal, easy-at-night feel. Which do you want?"
+A: "Warm apricot #D98E63 (current)"
+B: "Pale signal blue #7FA6D9"
+C: "Cool celadon #7FB09A"
+```
+
+stet did everything it was built to do. It stripped the map. It shuffled the
+labels so the authoring order carries no signal. And then the variant text said
+`(current)` and the question said *"I picked warm apricot"*.
+
+**Whichever label shows `(current)` is the agent's pick.** The entire guarantee
+— the thing the product is named for — was voided by content the agent wrote
+inside the item, through a hole no mechanism was watching.
+
+The shuffle protects against ordering. Nothing protected against a variant
+announcing itself.
+
+Refused now, in both places it can leak: a parenthesised annotation in a
+variant, and a first-person claim in the question. The check is deliberately
+narrow — `(current)`, `(existing)`, `my pick`, `I picked` — and explicitly does
+**not** fire on a bare "currently" or "now", because *"Buy now"* is this
+project's own worked example and ordinary interface copy says both. There is a
+false-positive corpus in the tests for exactly that reason.
+
+### Finding 53 — a colour, asked as three hex codes
+
+The same item is unjudgeable. You cannot pick an accent colour by reading
+`#7FB09A`. This is the failure an outside reviewer reported at 0.20 — naked
+strings for something inherently visual — and it is worse here, because the
+tool's whole pitch is *the real artifact, not a snippet*, and the agent had
+`--url` and `--image` in the instruction it received at session start.
+
+Guidance alone did not work. `stet schema` now says it in the imperative, next
+to the flags: **show the thing, not a description of it.** Whether that is
+enough is the next thing to test rather than assume — a heuristic that tries to
+detect "this decision is visual" would fire on real text decisions, and finding
+29 is a standing reminder of what that costs.
+
+### And one that is only visible from the other side
+
+The decision claims `index.html` — the whole file — for a question about an
+accent colour. Correct in shape, over-broad in practice: every future edit to
+the entire application is denied until somebody picks a colour. Left as it is
+for now, because the alternative is stet second-guessing a scope its author
+understood better than any rule could.
+
+### What the test actually settled
+
+The activation works. An agent that has never seen this tool, told once in a
+hook, used both halves correctly and unprompted — and the half I was least sure
+about, notes, produced the most obviously valuable artifact of the run.
+
+What the loop does *not* yet guarantee is that the decision arriving at the
+human is worth their attention. That is now the open question, and it is a much
+better one than the one we started with.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1983,6 +2076,8 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 52 | **a stranger's project, first real decision** | the blind test was voided by the item's own content — variant A said "(current)" and the question said "I picked warm apricot", so the shuffle protected nothing |
+| 53 | the same decision | an accent colour asked as three hex codes: unjudgeable, in the one tool whose pitch is showing the real artifact |
 | 51 | setting up a fresh project | `stet claude` printed "stet is now a gate in this repo" while the gate would not run until the next session — Claude Code snapshots hooks at startup, and nothing in three successful commands said so |
 | 50 | **working under its own gate** | the instruction telling an agent to ask lived only in `AGENTS.md` — a file Claude Code is not documented to read, and which stet writes `CLAUDE.md` alongside only if one already exists. Everything else travelled on a hook proven to fire |
 | 48 | a dead-export scan | `restatesOption` was exported and never called for two releases — written alongside a real fix and never wired, the same species as finding 40 |
@@ -1994,7 +2089,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-three reported success while broken.
+other forty-five reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

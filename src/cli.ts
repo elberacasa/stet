@@ -877,6 +877,14 @@ function schema(): void {
   ${warm('--globs')} ${dim("'src/hero/**'")} denies writes into those paths until it is ruled.
   ${warm('--why')} ${dim('"…"')} names what an option really is, if the artifact does not show it.
 
+  ${cool('Show the thing, not a description of it.')} A colour, a layout or a piece of
+  interface cannot be judged as a sentence — use ${warm('--url')} or ${warm('--image')} so the
+  human sees what you are actually asking about. Text options are for text.
+
+  ${cool('Never say which one is yours.')} No ${dim('"(current)"')}, no ${dim('"I picked X"')} in the
+  question. The labels are shuffled precisely so the human cannot tell; a
+  variant that announces itself throws that away and stet will refuse it.
+
   ${cool('The long form')} ${dim('— stet ask < item.json')} ${dim('— for views, mixed blocks, notes.')}
   Copy it, replace the content, pipe it in.
 
