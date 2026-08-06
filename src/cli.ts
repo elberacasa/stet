@@ -6,11 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { appendDirectRule, DEFAULT_BUDGET, readRules, renderBlock, selectRules } from './rules.js';
+import { appendDirectRule, DEFAULT_BUDGET, readRules, removeRule, renderBlock, selectRules } from './rules.js';
 import { notify, open } from './notify.js';
 // server.ts pulls in the 39KB page document. The hook path runs on every tool
 // call, so it is imported lazily and only by the command that serves.
-import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from './store.js';
+import { addItem, findEntry, findRoot, init, lastDecided, listEntries, paths, undecide, validId } from './store.js';
 import { assertItem } from './validate.js';
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
@@ -79,6 +79,7 @@ if (args.cmd === '') {
 // a misspelled flag is a person who knows what they want.
 const FLAGS: Record<string, string[]> = {
   '': ['port', 'no-open', 'budget'],
+  serve: ['port', 'no-open', 'budget'],
   ask: ['shuffle', 'help', 'url', 'image', 'code', 'why', 'id', 'globs', 'tag', 'how', 'notes', 'wait', 'timeout'],
   await: ['timeout'],
   rules: ['tag', 'budget'],
@@ -89,6 +90,7 @@ const FLAGS: Record<string, string[]> = {
   churn: ['threshold'],
   capture: ['views', 'out', 'json', 'settle'],
   demo: ['port', 'no-open'],
+  undo: [],
   init: [],
   schema: [],
   version: [],
@@ -153,6 +155,11 @@ async function main(): Promise<void> {
   checkValues();
   switch (args.cmd) {
     case '':
+    // Advertised by the help line as one of the things bare `stet` does, which
+    // reads like a subcommand — and typing it got "unknown command", which is
+    // the kind of papercut that makes a tool feel broken before it has done
+    // anything wrong.
+    case 'serve':
       return run();
     case 'ask':
       return ask();
@@ -178,6 +185,8 @@ async function main(): Promise<void> {
       return doCapture();
     case 'demo':
       return demo();
+    case 'undo':
+      return undo();
     case 'version':
     case '-v':
       return out(VERSION());
@@ -915,7 +924,42 @@ function doSync(): void {
   }
 }
 
+/**
+ * Take back a verdict. The canon governs every agent the moment a rule lands in
+ * it, so a wrong entry is expensive and the only way out used to be deleting a
+ * directory and hand-editing RULES.md — a bad answer for a file this tool tells
+ * you to treat as the product.
+ */
+function undo(): void {
+  const id = args.rest[0] ?? lastDecided(root)?.id;
+  if (!id) throw new Error('nothing has been decided yet');
+  const before = readRules(root);
+  const item = undecide(root, String(id));
+  const earned = before.filter((r) => r.from === id);
+  for (const r of earned) removeRule(root, r.n);
+  sync(root, readRules(root), { budget });
+
+  out();
+  out(`  ${cool('undone')} ${item.id} ${dim('— back in the queue, waiting on a verdict again')}`);
+  for (const r of earned) out(`  ${dim('removed rule')} ${r.n} ${dim('—')} ${r.text}`);
+  if (!earned.length) out(dim('  no rule had been earned from it'));
+  out(dim('  you have seen the reveal, so judging it again will not be blind'));
+  out();
+}
+
+function removeDirectRule(): void {
+  const n = Number(args.rest[1]);
+  if (!Number.isInteger(n)) throw new Error('usage: stet rule remove <n>   (see `stet rules` for numbers)');
+  const removed = removeRule(root, n);
+  if (!removed) throw new Error(`there is no rule ${n} — run \`stet rules\` to see what there is`);
+  sync(root, readRules(root), { budget });
+  out(`  ${cool('removed')} ${dim(`rule ${n} —`)} ${removed.text}`);
+  out(dim('  numbers are not reused; the rules after it keep theirs'));
+}
+
 function directRule(): void {
+  // `stet rule remove 3` — the canon is the product, so it needs an eraser.
+  if (args.rest[0] === 'remove') return removeDirectRule();
   const text = args.rest.join(' ').trim();
   if (!text) throw new Error('usage: stet rule "never centre the hero" [--globs src/web/**] [--tag design]');
   init(root);
@@ -940,7 +984,8 @@ function help(): void {
 
   Your agents ask once. Your answer stands.
 
-  ${cool('stet')}                        init, wire agent surfaces, serve, watch, notify
+  ${cool('stet')}                        start it here: serve the decision page, watch, notify
+  ${dim('                            (also: stet serve — first run initialises and wires)')}
   ${cool('stet ask')} "<question>" <a> <b>  queue a decision — this is how agents call it
   ${dim('        [--url u --url u] [--image f] [--code f]')}  ${dim('live pages, shots, files')}
   ${dim('        [--globs src/x/**] [--wait]')}          ${dim('claim paths · block for the verdict')}
@@ -950,8 +995,10 @@ function help(): void {
   ${cool('stet demo')}                   seven real decisions to judge, in a scratch copy
   ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
+  ${cool('stet undo')} [<id>]            take back the last verdict, and the rule it earned
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
+  ${cool('stet rule remove')} <n>        delete a rule from the canon
   ${cool('stet rules')} [--tag design]   print the canon
   ${cool('stet sync')} [--remove]        re-inject rules into agent surfaces, or restore them
 

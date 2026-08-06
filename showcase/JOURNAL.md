@@ -936,6 +936,167 @@ Same budget, sharper picture, and it shows what the tool actually does now.
 
 ---
 
+## Somebody else used it
+
+Every finding until now came from me running my own tool. Then it was used in
+another repository, by a different agent (Kimi), mid-build, without restarting
+the CLI — and it came back with a review.
+
+That review is worth more than everything above it, because none of these were
+reachable from inside my own head. It also contained one claim that is wrong,
+which is its own lesson: a report from a real session is evidence, not a
+verdict, and the fix depends on which parts survive checking.
+
+Reproduced first, one at a time.
+
+### Finding 29 — a question became rule 1 of somebody's canon
+
+The verdict they typed was:
+
+> they both look the same? can you please review
+
+That is not a verdict. It is a message back to whoever queued the decision, and
+the decision screen is not a reply box. It became **rule 1**, was written into
+`RULES.md`, and was injected into `AGENTS.md` as binding on every agent in that
+repository. On first use.
+
+The README says stet *"warns you, offline and deterministically, when a rule
+can't survive on its own"*. It does — for five things. Not for this:
+
+```
+PASSES "they both look the same? can you please review"
+PASSES "why do these look identical?"
+PASSES "can you please review this"
+```
+
+Every check was about a rule being *weak*. None asked whether it was a rule at
+all. A question, an interrogative opening, a request aimed at a person — those
+are now caught, and the message says what to do instead.
+
+The interesting part was the second draft. My first version also caught these:
+
+```
+CAUGHT "do not centre the hero"                       ← "do"
+CAUGHT "when the list is empty, say what to do next"  ← "when"
+```
+
+Both are good rules. And a warning that fires on a good rule is worse than no
+warning, because it teaches people to click past warnings — which is exactly
+how the sharpen step failed back in finding 5. The word list is narrower now,
+and the test carries nine phrasings that must keep passing alongside the six
+that must not.
+
+### Finding 30 — the check exists twice, and I fixed one copy
+
+The fix above was in `rules.ts`. The warning a human actually sees is rendered
+by the page, and the page is a self-contained document with no imports — so it
+carries **its own copy** of `weakness()`.
+
+I only found it by grepping before declaring victory. Fixing one copy would
+have left the warning silent in the one place it exists to appear, while every
+test passed.
+
+They cannot be deduplicated without giving the page a build step. So there is
+now a test that pulls the function out of the page document, runs it, and
+asserts both implementations agree — on the six that must be caught, the nine
+that must not, and the older cases too.
+
+### Finding 31 — there was no way back
+
+They had to delete the decided item by hand and edit `RULES.md` in a text
+editor. For a tool whose entire pitch is that the canon is binding the moment it
+is written, "open the file and fix it yourself" is not an answer.
+
+```bash
+stet undo              # take back the last verdict, and the rule it earned
+stet undo hero-type    # or a named one — it goes back in the queue
+stet rule remove 4     # delete a rule outright
+```
+
+`undo` removes the rule, returns the decision to pending with the verdict, the
+reason and the reveal stripped, keeps every variant and asset, re-syncs every
+agent surface, and says plainly that judging it again will not be blind because
+you have already seen the answer.
+
+Removal does **not** renumber. A gap is harmless — the parser reads the number
+from the heading — while renumbering would silently repoint every reference that
+already exists, including the per-session record of which rules an agent has
+been shown.
+
+### Finding 32 — two variants that were the same variant
+
+Their two text options rendered identically, so the screen asked a human to
+choose between indistinguishable things. Whatever they pressed was noise, and
+the reason they typed was the complaint that became finding 29. One bug caused
+the other.
+
+`stet ask` refuses now. Not just on identical text: local files are compared by
+**content**, because the likeliest way an agent produces this is capturing the
+same screen twice under two names and reporting success both times.
+
+One exemption, found by my own test suite rejecting a fixture: a variant with
+`blocks: []` renders nothing, and `[]` is documented as legitimate for an item
+described entirely by its map. Nothing rendered is nothing to compare.
+
+### Finding 33 — the help advertised a command that did not exist
+
+```
+$ stet serve
+stet: unknown command "serve" (this is stet 0.19.0)
+```
+
+while the help line read `stet   init, wire agent surfaces, serve, watch,
+notify`. That line describes what bare `stet` does, but it reads as a list of
+subcommands. Their words: a trust-killer, before the tool has done anything
+wrong.
+
+`stet serve` is real now, the line is reworded, and a test walks every command
+the help advertises and asserts none of them answer "unknown command".
+
+### The one I did not reproduce
+
+They reported that after their manual cleanup, `stet sync` said *unchanged*
+while the canon and the injected block disagreed. I hand-edited `RULES.md` and
+ran it:
+
+```
+-- hand-edited RULES.md, now running sync --
+  updated   AGENTS.md
+```
+
+It detected the drift and re-injected. Most likely they had already edited both
+files into agreement, which makes *unchanged* the correct answer. Reported as
+not reproduced rather than fixed, because a fix here would be a change with no
+bug under it.
+
+### The one I am not going to build yet
+
+Copy decisions render as naked strings, and their case — two toast messages —
+was unjudgeable partly for that reason. The suggestion was to render text
+variants inside representative chrome: a toast bubble, a hero slot, an
+empty-state frame.
+
+It is a real gap and the diagnosis is right. But which chrome, at which width,
+for which of a hundred contexts is a guess, and a wrong guess ships a frame that
+makes copy look better or worse than it is. The immediate harm — being asked to
+choose between two identical things — is fixed. The rest waits for a real case
+rather than my imagination of one.
+
+### And the one that cannot be fixed the way it was asked
+
+`npx stetmark` ran a cached **0.4.0** that had never heard of `init`, while
+0.18.0 was on the registry. The suggested fix was a startup version check
+against npm.
+
+stet says, on its front page, that nothing leaves your machine and it never
+touches the network. A background request to a registry on every invocation
+would trade the tool's single strongest promise for a papercut. The honest fix
+is the install line itself: every `npx` example now pins `@latest`, with a
+sentence saying why — `npx` will happily run whatever npm cached months ago, and
+stet cannot tell you it is stale without doing the thing it promises not to do.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -977,12 +1138,24 @@ Not one of these was visible from reading the code.
 | 32 | `stet demo` | `url` was the one block kind never absorbed on intake: a relative href was neither copied in (blank frame, 404) nor renamed (the filename announced the variant) |
 | 33 | a grep that found nothing | a raw NUL byte in `src/store.ts` made the file read as binary, so every search in it silently returned nothing |
 | 34 | the demo's first screen | seven items queued in one millisecond tie on `created` and fall back to sorting by id, opening the tour on an API envelope |
+| 35 | **someone else's first use** | a question — "they both look the same? can you please review" — passed every rule-quality check and became rule 1 of their canon, injected into AGENTS.md |
+| 36 | grepping before declaring victory | that check exists twice; the page carries its own copy, so fixing `rules.ts` alone left the warning silent in the only place a human sees it |
+| 37 | the same session | no way to take back a verdict or delete a rule: hand-delete the directory, hand-edit RULES.md |
+| 38 | the same session | two variants rendered identically and the screen asked for a choice between them — which is what produced the junk verdict in 35 |
+| 39 | the same session | the help advertised `stet serve`; typing it answered "unknown command" |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Seven of the thirty-four
-announced themselves — 5, 6, 7, 14, 24, 26 and 31 — and they are the boring
+invisible from the code and obvious from the use.** Eight of the thirty-nine
+announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other twenty-seven reported success while broken.
+other thirty-one reported success while broken.
+
+Findings 35 to 39 are the first that came from **someone other than the author**,
+in a repository I have never seen, and they are the densest run in this log: five
+real bugs in one session, including the worst one here — the canon, which is the
+whole product, accepting something that was not a rule and binding every agent in
+that repo to it. Thirty-four findings of my own use did not surface it, because I
+never typed a question into that box. I knew what the box was for.
 
 Number 31 is worth its own line, because it is the only one I had already
 fixed. The check-then-watch race closed inside `stet await` came back in the

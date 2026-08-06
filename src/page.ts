@@ -618,6 +618,16 @@ function weakness(t){
     return "reads as a reaction, not an instruction — say what to do next time";
   if(/^(i\\s+(think|guess|feel|like|prefer|would|reckon)|i'?d|maybe|probably|let'?s)\\b/i.test(t))
     return "written to yourself, not to an agent — drop the \\"I\\" and say what to do";
+  /* "they both look the same? can you please review" became rule 1 of someone's
+     canon on their first use. It is not a weak rule, it is not a rule: it is a
+     reply to whoever queued the decision, and this screen is not a reply box.
+     Kept byte-identical to weakness() in rules.ts — a test compares them. */
+  if(t.indexOf("?")!==-1)
+    return "this is a question, not a rule — an agent cannot obey it; answer the decision or discard it";
+  if(/^(why|what|which|who|how|can|could|should|would|does|did|is|are|was|were)\\b/i.test(t))
+    return "reads as a question, not an instruction — say what an agent should do instead";
+  if(/\\b(please|can you|could you|pls)\\b/i.test(t)||/^(review|check|fix|redo|look)\\b/i.test(t))
+    return "this asks someone to do something — a rule tells every future agent what to do";
   return null;
 }
 

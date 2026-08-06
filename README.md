@@ -9,15 +9,22 @@
 ![stet — two signup flows running side by side, judged blind; the verdict reveals which was which and becomes a rule every agent obeys](docs/stet.gif)
 
 ```bash
-npx stetmark demo     # seven real decisions to judge, right now, in a scratch copy
+npx stetmark@latest demo   # seven real decisions to judge, right now, in a scratch copy
 ```
 
 Then, in a repo you care about:
 
 ```bash
-npx stetmark          # run it in any repo
+npx stetmark@latest   # run it in any repo
 npm i -g stetmark     # then the command is just: stet
 ```
+
+The `@latest` is not decoration. `npx stetmark` will happily run whatever
+version npm cached on that machine months ago, and a first run that fails
+because the binary predates the command you typed is the worst possible
+introduction — it happened to the first person who tried it. stet never talks to
+the network, so it cannot tell you it is out of date; pinning `@latest` is the
+fix that does not cost you a network call on every run.
 
 Zero runtime dependencies. Nothing leaves your machine. No account, no key, no
 network.
@@ -250,6 +257,15 @@ times before it was made to check itself.
 
 All three land in `.stet/RULES.md`, which is the actual product: your
 accumulated taste, in plain text, portable, and enforceable by any agent.
+
+And all three can be taken back. A rule starts governing every agent the moment
+it lands, so a wrong one is expensive:
+
+```bash
+stet undo              # take back the last verdict, and the rule it earned
+stet undo hero-type    # or a particular one — it goes back in the queue
+stet rule remove 4     # delete a rule outright; the others keep their numbers
+```
 
 ## Why it is cheaper, not slower
 

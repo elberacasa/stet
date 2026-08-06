@@ -620,3 +620,166 @@ describe('the source', () => {
     }
   });
 });
+
+// ── the rule-quality check, in both places it lives ────────────────────────
+// Reported from a real first use in another repo: "they both look the same?
+// can you please review" was accepted as a verdict and became rule 1 of that
+// canon, injected into AGENTS.md. It is not a weak rule — it is not a rule.
+describe('what cannot become a rule', () => {
+  const notRules = [
+    'they both look the same? can you please review',
+    'can you please review this',
+    'why do these look identical?',
+    'which one is better',
+    'review this again',
+    'should we use the blue one',
+  ];
+  // Phrasings that must keep working. A warning that fires on a good rule
+  // teaches people to click past warnings, which is how the sharpen step
+  // failed the first time.
+  const realRules = [
+    'do not centre the hero',
+    'when the list is empty, say what to do next',
+    'where a form fits on one screen, keep it there',
+    'use the shorter label on primary buttons',
+    'never centre the hero',
+    'buttons say what happens, never "Submit"',
+    'always ask before adding a dependency',
+    'error copy names the next action, not the failure',
+    'prefer the quieter of two options',
+  ];
+
+  it('refuses a question', () => {
+    for (const t of notRules) expect(weakness(t), t).not.toBeNull();
+  });
+
+  it('does not fire on rules people actually write', () => {
+    for (const t of realRules) expect(weakness(t), t).toBeNull();
+  });
+
+  it('agrees with the copy of itself that runs in the page', () => {
+    // The check exists twice: once here and once inside the page document,
+    // which has no imports. Fixing only one is invisible exactly where it
+    // matters, because the page is where the warning is shown.
+    const src = /function weakness\(t\)\{[\s\S]*?\n\}/.exec(PAGE)?.[0];
+    expect(src, 'weakness() not found in the page').toBeTruthy();
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const inPage = new Function(`${src}; return weakness;`)() as (t: string) => string | null;
+    for (const t of [...notRules, ...realRules, '', 'short', 'I think go with the flow', 'option A is nicer']) {
+      expect(inPage(t), `page and rules.ts disagree on ${JSON.stringify(t)}`).toEqual(weakness(t));
+    }
+  });
+});
+
+// ── taking it back ─────────────────────────────────────────────────────────
+describe('undo', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  const decide = (id: string) => {
+    const item = { ...JSON.parse(fs.readFileSync(path.join(root, '.stet/pending', id, 'item.json'), 'utf8')) } as Item;
+    const decided = { ...item, verdict: 'A', because: 'the shorter label reads faster', decidedAt: '2026-08-06T10:00:00Z' };
+    fs.mkdirSync(path.join(root, '.stet/decided', id), { recursive: true });
+    fs.writeFileSync(path.join(root, '.stet/decided', id, 'item.json'), JSON.stringify(decided, null, 2));
+    fs.rmSync(path.join(root, '.stet/pending', id), { recursive: true, force: true });
+    appendRule(root, decided);
+  };
+
+  it('removes the rule and puts the decision back in the queue', () => {
+    run(['ask', 'Which label?', 'Save', 'Save to library']);
+    decide('which-label');
+    expect(readRules(root).some((r) => r.from === 'which-label')).toBe(true);
+
+    const r = run(['undo']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(readRules(root).some((r2) => r2.from === 'which-label')).toBe(false);
+    expect(fs.existsSync(path.join(root, '.stet/pending/which-label'))).toBe(true);
+    expect(fs.existsSync(path.join(root, '.stet/decided/which-label'))).toBe(false);
+  });
+
+  it('drops the verdict but keeps everything there was to judge', () => {
+    run(['ask', 'Which copy?', 'Done', 'All set']);
+    decide('which-copy');
+    run(['undo', 'which-copy']);
+    const back = JSON.parse(fs.readFileSync(path.join(root, '.stet/pending/which-copy/item.json'), 'utf8')) as Item;
+    expect(back.verdict).toBeUndefined();
+    expect(back.because).toBeUndefined();
+    expect(back.variants).toHaveLength(2);
+    expect(back.map).toBeTruthy();
+  });
+
+  it('removes a rule by number without renumbering the rest', () => {
+    // Renumbering would silently repoint every reference that already exists —
+    // the per-session record of what an agent has been shown, and anything a
+    // human wrote down.
+    run(['rule', 'never centre the hero']);
+    run(['rule', 'buttons name the action']);
+    run(['rule', 'error copy names the next action']);
+    expect(run(['rule', 'remove', '2']).status).toBe(0);
+    expect(readRules(root).map((r) => r.n)).toEqual([1, 3]);
+    expect(readRules(root).map((r) => r.text)).toEqual(['never centre the hero', 'error copy names the next action']);
+  });
+
+  it('says so rather than pretending when there is no such rule', () => {
+    const r = run(['rule', 'remove', '99']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/no rule 99/);
+  });
+});
+
+// ── two variants that are the same variant ─────────────────────────────────
+describe('nothing to choose between', () => {
+  it('refuses variants with identical content', () => {
+    expect(problems({
+      id: 'same', question: 'Which toast?',
+      map: { A: 'first', B: 'second' },
+      variants: [
+        { label: 'A', blocks: [{ kind: 'text', text: 'Saved.' }] },
+        { label: 'B', blocks: [{ kind: 'text', text: 'Saved.' }] },
+      ],
+    }).join(' ')).toMatch(/identical/);
+  });
+
+  it('catches the same file captured twice under two names', () => {
+    // The likeliest way an agent produces a non-decision: capture both
+    // variants, but the second capture never changed anything.
+    fs.writeFileSync(path.join(root, 'a.png'), 'IDENTICAL BYTES');
+    fs.writeFileSync(path.join(root, 'b.png'), 'IDENTICAL BYTES');
+    expect(problems({
+      id: 'shot', question: 'Which spacing?',
+      map: { A: 'tight', B: 'loose' },
+      variants: [
+        { label: 'A', blocks: [{ kind: 'image', src: 'a.png' }] },
+        { label: 'B', blocks: [{ kind: 'image', src: 'b.png' }] },
+      ],
+    }, { from: root }).join(' ')).toMatch(/identical/);
+  });
+
+  it('allows variants that genuinely differ', () => {
+    expect(problems({
+      id: 'diff', question: 'Which toast?',
+      map: { A: 'long', B: 'short' },
+      variants: [
+        { label: 'A', blocks: [{ kind: 'text', text: 'Saved to your library' }] },
+        { label: 'B', blocks: [{ kind: 'text', text: 'Saved' }] },
+      ],
+    })).toEqual([]);
+  });
+});
+
+// ── commands the help advertises ───────────────────────────────────────────
+describe('the help', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  it('advertises no command that does not exist', () => {
+    // `stet serve` was listed in the help line and answered "unknown command",
+    // which is the papercut that makes a tool feel broken before it has done
+    // anything wrong.
+    const help = spawnSync('node', [BIN, 'help'], { encoding: 'utf8' }).stdout.replace(/\x1b\[[0-9;]*m/g, '');
+    const advertised = [...help.matchAll(/^\s{2}stet (\w+)/gm)].map((m) => m[1]);
+    expect(advertised.length).toBeGreaterThan(5);
+    for (const cmd of new Set(advertised)) {
+      const r = spawnSync('node', [BIN, cmd, '--help'], { cwd: root, encoding: 'utf8', timeout: 8000 });
+      expect(r.stderr, `stet ${cmd} is advertised but not a command`).not.toMatch(/unknown command/);
+    }
+  });
+});

@@ -191,7 +191,42 @@ export function weakness(text: string): string | null {
   if (/^(i\s+(think|guess|feel|like|prefer|would|reckon)|i'?d|maybe|probably|let'?s)\b/i.test(t)) {
     return 'written to yourself, not to an agent — drop the "I" and say what to do';
   }
+  // The one that got through in the wild: "they both look the same? can you
+  // please review" became rule 1 of somebody's canon on their first use. Every
+  // check above missed it, because it is not a bad rule — it is not a rule. It
+  // is a message back to whoever queued the decision, and the decision screen
+  // is not a reply box. A question cannot bind an agent next week.
+  if (t.includes('?')) {
+    return 'this is a question, not a rule — an agent cannot obey it; answer the decision or discard it';
+  }
+  // Deliberately not "do", "when" or "where": "do not centre the hero" and
+  // "when the list is empty, say what to do next" are both good rules, and a
+  // warning that fires on a good rule teaches people to click past warnings —
+  // which is exactly how the sharpen step failed the first time.
+  if (/^(why|what|which|who|how|can|could|should|would|does|did|is|are|was|were)\b/i.test(t)) {
+    return 'reads as a question, not an instruction — say what an agent should do instead';
+  }
+  // Addressed to a person, asking for something to happen to the decision
+  // rather than stating what future work must do.
+  if (/\b(please|can you|could you|pls)\b/i.test(t) || /^(review|check|fix|redo|look)\b/i.test(t)) {
+    return 'this asks someone to do something — a rule tells every future agent what to do';
+  }
   return null;
+}
+
+/**
+ * The rule text a verdict would produce, checked against the thing that was
+ * being judged. Restating an option is not a rule: it is the answer, and the
+ * answer is already recorded as the verdict.
+ */
+export function restatesOption(text: string, options: string[]): boolean {
+  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const t = norm(ruleLine(text));
+  if (!t) return false;
+  return options.some((o) => {
+    const n = norm(o);
+    return n.length > 0 && n === t;
+  });
 }
 
 /**
@@ -360,4 +395,36 @@ export function renderBlock(sel: Selection): string {
     lines.push('', `${sel.heldBack} more rule${sel.heldBack === 1 ? '' : 's'} held back by the token budget — run \`stet rules\` for all.`);
   }
   return lines.join('\n');
+}
+
+/**
+ * Deletes rule `n` from the canon and returns it, or null if it was not there.
+ *
+ * Numbers are not reassigned. A gap is harmless — the parser reads the number
+ * from the heading — whereas renumbering would silently repoint every reference
+ * that already exists: the per-session record of which rules an agent has
+ * already been shown, anything a human wrote down, and the injected block in
+ * every agent surface.
+ */
+export function removeRule(root: string, n: number): Rule | null {
+  const file = paths(root).rules;
+  return withLock(file, () => {
+    let current: string;
+    try {
+      current = fs.readFileSync(file, 'utf8');
+    } catch {
+      return null;
+    }
+    const found = parseRules(current).find((r) => r.n === n);
+    if (!found) return null;
+    const kept = current
+      .split(/(?=^## )/m)
+      .filter((part) => {
+        if (!part.startsWith('## ')) return true;
+        return parseRules(part)[0]?.n !== n;
+      })
+      .join('');
+    writeAtomic(file, kept.replace(/\n{3,}$/, '\n'));
+    return found;
+  });
 }

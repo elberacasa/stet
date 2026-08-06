@@ -7,6 +7,9 @@
 //
 // The messages are written to be read by whatever wrote the item, so each one
 // says what is wrong and what to do instead.
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { Item } from './types.js';
 
 /** Required fields per block kind, keyed by the `kind` an item may declare. */
@@ -28,7 +31,43 @@ const isStr = (v: unknown): v is string => typeof v === 'string' && v.trim() !==
  * Every problem with an item, in the order a person would fix them. Empty means
  * it is safe to queue.
  */
-export function problems(input: unknown): string[] {
+/**
+ * What a variant actually shows, reduced to a string. Two variants with the
+ * same signature are the same variant: the human is asked to choose between
+ * indistinguishable things, presses one at random, and whatever rule comes out
+ * is noise. Local files are compared by content, not by name, because the
+ * likeliest way an agent produces this is capturing the same screen twice under
+ * two names and reporting success.
+ */
+function signature(blocks: unknown[], from: string | undefined): string {
+  return blocks
+    .map((b) => {
+      if (!b || typeof b !== 'object') return 'x';
+      const block = b as Record<string, unknown>;
+      const parts: string[] = [String(block.kind ?? '')];
+      for (const f of ['text', 'lang', 'path'] as const) {
+        if (typeof block[f] === 'string') parts.push(`${f}=${(block[f] as string).trim()}`);
+      }
+      for (const f of ['src', 'href'] as const) {
+        const v = block[f];
+        if (typeof v !== 'string' || !v) continue;
+        let ref = v.trim();
+        if (from && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(ref) && !/[?#]/.test(ref)) {
+          try {
+            const file = path.resolve(from, ref);
+            if (fs.statSync(file).isFile()) ref = `sha1:${createHash('sha1').update(fs.readFileSync(file)).digest('hex')}`;
+          } catch {
+            /* unreadable — compare by path, which is all we have */
+          }
+        }
+        parts.push(`${f}=${ref}`);
+      }
+      return parts.join('|');
+    })
+    .join('\n');
+}
+
+export function problems(input: unknown, opts: { from?: string } = {}): string[] {
   const out: string[] = [];
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     return ['the item must be a JSON object — see `stet schema` for a worked example'];
@@ -81,6 +120,25 @@ export function problems(input: unknown): string[] {
     const dupes = labels.filter((l, i) => labels.indexOf(l) !== i);
     if (dupes.length) out.push(`two variants share the label ${JSON.stringify(dupes[0])} — labels must be distinct`);
 
+    // Asking a human to choose between two identical things spends the one
+    // resource this whole tool is trying to spend well.
+    const seen = new Map<string, string>();
+    variants.forEach((v, i) => {
+      const variant = v as unknown as Record<string, unknown>;
+      // A variant with no blocks renders nothing, so there is nothing to
+      // compare — and `blocks: []` is documented as legitimate for an item
+      // described entirely by its map.
+      if (!Array.isArray(variant.blocks) || variant.blocks.length === 0) return;
+      const sig = signature(variant.blocks, opts.from);
+      const label = typeof variant.label === 'string' ? variant.label : `variants[${i}]`;
+      const twin = seen.get(sig);
+      if (twin !== undefined) {
+        out.push(`variants ${JSON.stringify(twin)} and ${JSON.stringify(label)} are identical — there is nothing to choose between them`);
+      } else {
+        seen.set(sig, label);
+      }
+    });
+
     // The map is what the human is told after they choose. Without it the
     // reveal is empty and the blind test has nothing to reveal, which is the
     // entire point of the exercise.
@@ -106,8 +164,8 @@ export function problems(input: unknown): string[] {
 }
 
 /** Throws with every problem at once, so a caller fixes one round, not five. */
-export function assertItem(input: unknown): asserts input is Item {
-  const found = problems(input);
+export function assertItem(input: unknown, opts: { from?: string } = {}): asserts input is Item {
+  const found = problems(input, opts);
   if (!found.length) return;
   throw new Error(
     `this item cannot be queued:\n` +

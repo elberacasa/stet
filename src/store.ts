@@ -162,7 +162,7 @@ export function addItem(root: string, input: Item, opts: { shuffle?: boolean; fr
   // Before anything is written. An agent authored this, and a bad item used to
   // fail with a TypeError naming an internal property, or queue successfully
   // and render a decision the human could not act on.
-  assertItem(input);
+  assertItem(input, { from: opts.from ?? process.cwd() });
   init(root);
   const p = paths(root);
   const dir = path.join(p.pending, input.id);
@@ -282,4 +282,42 @@ export function assetPath(root: string, id: string, rel: string): string | null 
     if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
   }
   return null;
+}
+
+/**
+ * Puts a decided item back in the queue, undoing the verdict.
+ *
+ * The whole pitch is that the canon is binding, which makes a wrong entry in it
+ * expensive: the first thing it does is start governing agents. Before this
+ * existed the only way out was to delete a directory and hand-edit RULES.md,
+ * which is a bad answer for a file the tool tells you to treat as sacred.
+ *
+ * The verdict, the reason and the reveal are dropped. The variants, the map and
+ * every asset stay exactly as they were, so the decision can be judged again —
+ * though not blind, since whoever is undoing it has already seen the reveal.
+ */
+export function undecide(root: string, id: string): Item {
+  const p = paths(root);
+  const from = path.join(p.decided, id);
+  const to = path.join(p.pending, id);
+  const entry = readEntry(from, 'decided');
+  if (!entry.ok) throw new Error(`${id} cannot be read: ${entry.error}`);
+  if (fs.existsSync(to)) throw new Error(`${id} is already pending — nothing to undo`);
+
+  const { verdict, because, decidedAt, revealed, ...rest } = entry.item as Item & Record<string, unknown>;
+  void verdict;
+  void because;
+  void decidedAt;
+  void revealed;
+
+  fs.mkdirSync(p.pending, { recursive: true });
+  fs.renameSync(from, to);
+  fs.writeFileSync(path.join(to, 'item.json'), JSON.stringify(rest, null, 2) + '\n');
+  return rest as Item;
+}
+
+/** The most recently decided item, or null. */
+export function lastDecided(root: string): Item | null {
+  const decided = listEntries(root, 'decided').filter((e) => e.ok);
+  return decided.length ? (decided[0].ok ? decided[0].item : null) : null;
 }
