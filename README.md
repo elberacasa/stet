@@ -234,6 +234,7 @@ stet rule "<one line>"      record a correction straight into the canon
 stet rules [--tag design]   print the canon
 stet sync [--remove]        re-inject into agent surfaces, or restore them exactly
 
+stet schema                 the item format, as a worked example
 stet churn                  files this repo keeps having to redo
 stet claude [--project]     wire into Claude Code's hooks (see above)
 stet claude remove          unwire, restoring settings.json exactly

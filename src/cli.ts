@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 interface Args {
   cmd: string;
@@ -74,6 +74,8 @@ async function main(): Promise<void> {
       return claude();
     case 'churn':
       return showChurn();
+    case 'schema':
+      return schema();
     case 'version':
     case '--version':
       return out(VERSION);
@@ -288,7 +290,10 @@ async function run(): Promise<void> {
 // ── ask: how agents queue a decision ──────────────────────────────────────
 
 async function ask(): Promise<void> {
-  const raw = await readStdin();
+  // Nothing is piped in. Waiting forever is the worst possible answer to the
+  // first thing anyone types when working out how this is called.
+  if (process.stdin.isTTY || args.flags.help) return schema();
+  const raw = await readStdin(30_000);
   if (!raw.trim()) throw new Error('nothing on stdin — pipe an item: stet ask < item.json');
   let item: Item;
   try {
@@ -301,6 +306,63 @@ async function ask(): Promise<void> {
   const rel = path.relative(process.cwd(), dir) || dir;
   out(item.id);
   process.stderr.write(`stet: queued ${item.id} — put any assets beside ${rel}/item.json\n`);
+}
+
+/**
+ * The item format, as a working example rather than a grammar. This is what an
+ * agent reads before its first `ask`, so it is the whole contract: matched
+ * views, a map that never reaches the page, and globs that gate the paths the
+ * answer will govern.
+ */
+function schema(): void {
+  out(`
+  ${warm('stet ask')} ${dim('< item.json')}   ${dim('— queue a decision and let the human rule on it')}
+
+  ${cool('A worked example.')} Copy it, replace the content, pipe it in.
+
+{
+  "id": "hero-type",                        ${dim('// [a-z0-9._-], becomes the directory name')}
+  "question": "Which register should the site speak in?",
+  "notes": "Same words, same grid — only the type and palette differ.",
+  "how": "Press S to flip them in the same frame. Check mobile too.",
+  "tags": ["design"],                       ${dim('// optional, groups rules')}
+  "globs": ["src/web/**"],                  ${dim('// writes here are DENIED until ruled')}
+
+  "map": {                                  ${dim('// what each label really is —')}
+    "A": "serif on warm paper, left-aligned",   ${dim('// never sent to the page')}
+    "B": "geometric sans, centred"              ${dim('// until a verdict is recorded')}
+  },
+
+  "variants": [
+    { "label": "A", "blocks": [
+      { "kind": "image", "src": "a-desktop.png", "view": "desktop" },
+      { "kind": "image", "src": "a-mobile.png",  "view": "mobile"  },
+      { "kind": "text",  "text": "What it costs, honestly." }
+    ]},
+    { "label": "B", "blocks": [
+      { "kind": "image", "src": "b-desktop.png", "view": "desktop" },
+      { "kind": "image", "src": "b-mobile.png",  "view": "mobile"  },
+      { "kind": "text",  "text": "What this one costs." }
+    ]}
+  ]
+}
+
+  ${cool('blocks')}  code{lang,text} diff{path,text} text{text} image{src} audio{src} url{href}
+          ${dim('every block may carry title and view')}
+
+  ${cool('view')}    ${dim('the matched-capture key. Both variants must render the SAME views —')}
+          ${dim('same camera, same breakpoint, same screen — so the only difference in')}
+          ${dim('the frame is the thing being decided. That is what makes flipping work.')}
+
+  ${cool('assets')}  ${dim('put files beside item.json, or give a path relative to cwd and stet')}
+          ${dim('copies them in. They are never sent to the model — the human looks at')}
+          ${dim('them in a browser, so the comparison costs no tokens.')}
+
+  ${warm('Then block on it:')}  stet await hero-type   ${dim('— sleeps on a file watch, burns nothing')}
+
+  ${dim('One variant is legal: that is an acceptance gate ("good enough to ship?").')}
+  ${dim('Labels are shuffled on intake, so do not assume A is the one you built first.')}
+`);
 }
 
 // ── await: block on a file watch, burn nothing ────────────────────────────
@@ -394,6 +456,7 @@ function help(): void {
 
   ${cool('stet')}                        init, wire agent surfaces, serve, watch, notify
   ${cool('stet ask')} < item.json        queue a decision — this is how agents call it
+  ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${cool('stet rules')} [--tag design]   print the canon

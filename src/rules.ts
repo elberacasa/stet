@@ -294,7 +294,7 @@ function preamble(): string {
   return [
     'STET RULES — verdicts this repo\'s owner already gave. They are binding.',
     'Follow them without asking again. Hitting a preference fork with no rule',
-    'here is the one time to stop and ask: `stet ask < item.json`.',
+    'here is the one time to stop and ask — run `stet schema` to see how.',
     // The wiring is per-developer, so nothing checked in can tell a teammate
     // it is missing. This line can, and it costs about twenty tokens once.
     'If `stet claude status` says unwired, tell the human to run `stet claude`.',
