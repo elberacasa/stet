@@ -86,7 +86,7 @@ absolute path.
 ## Before you push
 
 ```bash
-npm run build && npm test        # 158 tests
+npm run build && npm test        # the unit suite
 npm run stress                   # four suites, including one that packs the
                                  # tarball and installs it somewhere clean
 ```
@@ -102,9 +102,12 @@ the process, which is your checkout. `test/stress.mjs` asserts this.
 ## The method
 
 Everything in [`showcase/JOURNAL.md`](showcase/JOURNAL.md) is a failure found by
-using the tool, written down as it happened. Forty-five of them, of which
-thirty-seven reported success while broken. It is long, and it is the most
-useful thing in the repository.
+using the tool, written down as it happened. The running tally at the bottom is
+the summary; the great majority of them reported success while broken. It is
+long, and it is the most useful thing in the repository.
+
+Counts go stale, so this file does not carry them — that is the same defect as
+a hook wired to an event that does not exist, only in prose.
 
 The eight rules distilled from it are installable — `stet method` — and are
 already in this repo's canon.
