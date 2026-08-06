@@ -135,12 +135,26 @@ console.log('\n6. hostile hook input over the real CLI');
   for (const inp of inputs) {
     for (const ev of ['pre-tool-use', 'post-tool-use', 'stop', 'session-start', 'post-compact']) {
       try {
-        const { stdout } = await run('node', [BIN, 'hook', ev], { input: inp });
+        // cwd matters: `{}` and `null` carry no cwd, and the hook then falls
+        // back to the project containing the process — which, without this, is
+        // the checkout you are developing in. The fuzz was firing hooks at the
+        // real repository and writing state into its .stet/.
+        const { stdout } = await run('node', [BIN, 'hook', ev], { input: inp, cwd: root });
         if (stdout.trim() && !stdout.trim().startsWith('{')) bad++;
       } catch { bad++; }
     }
   }
   ok('every hook exits clean on garbage', bad === 0, `${inputs.length * 5} combinations`);
+  // A suite that writes into the tree it is testing from is a suite that lies
+  // about that tree. `stet claude status` reports which hooks have really been
+  // called; markers left here by a test would be false evidence in the one
+  // check built to be trustworthy.
+  const REPO = path.resolve(HERE, '..');
+  const leaked = fs.existsSync(path.join(REPO, '.stet', 'sessions'))
+    ? fs.readdirSync(path.join(REPO, '.stet', 'sessions')).filter((n) => n.startsWith('.fired-'))
+    : [];
+  ok('and none of it touched the repository it was run from', leaked.length === 0,
+    leaked.length ? `left ${leaked.join(', ')} in ./.stet/sessions` : 'working tree untouched');
 }
 
 // ── 7. many agents at once — fan-out workflows, parallel subagents ───────

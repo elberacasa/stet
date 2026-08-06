@@ -1568,6 +1568,97 @@ to say out loud: hooks load when a session starts, so restart Claude Code.
 
 ---
 
+## Cleaning the workshop
+
+The report was that several stets were in play at once while building stet. It
+was right, and the cause was worse than untidiness.
+
+### Finding 46 — the `stet` on PATH was twenty-one versions old
+
+```
+$ stet --version
+  stet — let it stand          ← not a version. 0.4.0 had no --version.
+$ npm ls -g
+  └── stetmark@0.4.0
+```
+
+A global install from the first day of the project, still first on PATH twenty-
+one releases later. It predates `init`, `demo`, `note`, `method`, `undo`,
+`status`, `serve`, the one-line ask, the glob fix and the `PreCompact` fix.
+
+It was never *wrong* — every `stet claude` run in this repo had detected it,
+said so, and pinned an absolute path to the working tree instead. The machinery
+built across findings 1, 23, 26 and 43 did exactly its job, quietly, for a day
+and a half. But it meant a stray `stet` in a terminal answered from 0.4.0, and
+that is the confusion.
+
+Fixed by `npm link`, so `stet` anywhere on this machine *is* the checkout, and
+written down in a new `CONTRIBUTING.md` as the first thing anyone is told.
+
+The banner-instead-of-a-version in that output is finding 24 demonstrating
+itself live: `--version` was an unreachable case that fell through to the
+default command.
+
+### Finding 47 — the stress suite was firing hooks at the developer's own repo
+
+While wiring this repo under its own gate, `stet claude status` reported four
+events called *6 minutes ago*. Nothing had called them. The repo had been wired
+seconds earlier.
+
+`test/stress.mjs` fuzzes the hook CLI with hostile input — `''`, `not json`,
+`{}`, `null`. It spawned the binary **without a `cwd`**, and a payload with no
+`cwd` field makes the hook fall back to the project containing the process:
+the checkout. Forty combinations, five events, fired at the real repository.
+
+Harmless for a year of the project's life, because a hook against a repo with
+nothing pending does nothing observable. It stopped being harmless the moment
+the previous release added a record of *which hooks have actually been called* —
+the test was writing false evidence into the one check built to be trustworthy,
+and the first thing that check ever reported here was a lie.
+
+Both fixed: the spawn passes `cwd`, and two assertions now guard it — one in the
+fuzz section that pinpoints it, and one at the end of the last suite in the run,
+which sees anything any of the four left behind.
+
+There is a general rule in this, and it is now note-shaped: **a test that writes
+into the tree it runs from cannot be trusted about that tree.**
+
+### `stet rule edit`
+
+Cleaning the canon needed it. Rule 1 of this repo's own canon read *"I think go
+with the flow"* — a real verdict with useless wording, and precisely what the
+rule-quality check now catches.
+
+Sharpening was reachable only from the decision page, in the seconds after a
+reveal. A week later the only options were delete it or hand-edit `RULES.md`,
+which is the same answer that made `undo` necessary two releases ago.
+
+```
+$ stet rule edit 1 "the sharpen field takes focus the moment the reveal lands"
+  was I think go with the flow
+  1  the sharpen field takes focus the moment the reveal lands
+```
+
+The scope, the tags and the provenance survive — it is the same rule, better
+said. And it warns if the new wording is still not a rule.
+
+### What the workshop looks like now
+
+`stet` on PATH is the working tree. The repo is wired under its own gate, six
+hooks and two slash commands. Its canon holds a real verdict and the eight
+method rules; `.stet/NOTES.md` holds eight landmines, and both are committed.
+The stale empty `.claude/`, a `.DS_Store` and two pre-0.5 session files in the
+superseded `.json` format are gone.
+
+The one thing `stet claude status` still says is honest and expected:
+
+```
+  ! wired and verified, but Claude Code has never called any of it.
+    hooks are loaded when a session starts — restart Claude Code, then check again.
+```
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1619,13 +1710,15 @@ Not one of these was visible from reading the code.
 | 42 | re-wiring a pinned install | it recognised its own command files by sniffing for a string the pinned form does not contain, so it refused to update itself and left a stale command behind |
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
+| 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 47 | wiring this repo under its own gate | `test/stress.mjs` fuzzed the hook CLI without a `cwd`, so forty hostile payloads fired hooks at the developer's own checkout — writing false evidence into the check built to be trustworthy |
 | 45 | **writing a rule scoped to `**/*.test.*`** | every glob containing a full stop or `**/` was silently truncated or dropped by the provenance parser, so `package.json` became the glob `package` and `**/*.test.*` became no scope at all — for the life of the project, in the mechanism the whole tool is built on |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other thirty-seven reported success while broken.
+other thirty-nine reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

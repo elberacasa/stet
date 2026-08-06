@@ -286,6 +286,22 @@ console.log('\n8. stet demo, on a machine with nothing set up');
   fs.rmSync(empty, { recursive: true, force: true });
 }
 
+// ── the suites must leave the checkout exactly as they found it ───────────
+// Last suite in the run, so this sees anything the other three left behind.
+// `stet claude status` reports which hooks have really been called; a marker
+// dropped here by a test is false evidence in the one check built to be
+// trustworthy — and a hook fired with no cwd falls back to the project
+// containing the process, which is the checkout you are developing in.
+console.log('\n9. the working tree, after all of it');
+{
+  const sessions = path.join(REPO, '.stet', 'sessions');
+  const leaked = fs.existsSync(sessions)
+    ? fs.readdirSync(sessions).filter((n) => n.startsWith('.fired-'))
+    : [];
+  ok('no suite left hook evidence in the repository it ran from', leaked.length === 0,
+    leaked.length ? `left ${leaked.join(', ')}` : 'untouched');
+}
+
 console.log(`\n${fail.length ? `FAILED (${fail.length}): ${fail.join(' | ')}` : 'the packaged artifact works end to end for a new user'}`);
 fs.rmSync(home, { recursive: true, force: true });
 fs.rmSync(SP, { recursive: true, force: true });

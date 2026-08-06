@@ -36,3 +36,7 @@ somebody already stepped on. Anything may add one; nothing here is binding.
 ## 8 — hooks must never throw or block: any failure exits 0 with no output, which Claude Code treats as carry on
 
 *Learned 2026-08-06. Globs: src/hooks.ts.*
+
+## 9 — a test that writes into the tree it runs from cannot be trusted about that tree — spawned hooks need an explicit cwd, or a payload without one falls back to this checkout
+
+*Learned 2026-08-06. Globs: test/**.*

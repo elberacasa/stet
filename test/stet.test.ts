@@ -870,3 +870,34 @@ describe('the method canon', () => {
     expect(matchesAny(tests!.globs, 'src/index.ts')).toBe(false);
   });
 });
+
+// ── editing a rule after the moment has passed ─────────────────────────────
+describe('sharpening a rule later', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  it('rewrites the line and leaves the provenance alone', () => {
+    // Sharpening was reachable only from the page, in the seconds after a
+    // reveal. A rule whose wording goes stale a week later could then only be
+    // deleted or hand-edited — the same answer that made `undo` necessary.
+    run(['rule', 'go with the flow here', '--globs', 'src/page.ts', '--tag', 'ui']);
+    expect(run(['rule', 'edit', '1', 'the sharpen field takes focus when the reveal lands']).status).toBe(0);
+    const rule = readRules(root)[0];
+    expect(rule.text).toBe('the sharpen field takes focus when the reveal lands');
+    expect(rule.globs, 'scope must survive an edit').toEqual(['src/page.ts']);
+    expect(rule.tags).toEqual(['ui']);
+  });
+
+  it('says so rather than pretending when the rule is not there', () => {
+    const r = run(['rule', 'edit', '42', 'something']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/no rule 42/);
+  });
+
+  it('warns when the sharper wording is still not a rule', () => {
+    run(['rule', 'never centre the hero', '--globs', 'src/**']);
+    const r = run(['rule', 'edit', '1', 'why does this keep happening?']);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/question/);
+  });
+});

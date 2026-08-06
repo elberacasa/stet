@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { appendDirectRule, DEFAULT_BUDGET, readRules, removeRule, renderBlock, selectRules } from './rules.js';
+import { appendDirectRule, DEFAULT_BUDGET, readRules, removeRule, renderBlock, reviseRule, selectRules, weakness } from './rules.js';
 import { notify, open } from './notify.js';
 // server.ts pulls in the 39KB page document. The hook path runs on every tool
 // call, so it is imported lazily and only by the command that serves.
@@ -1178,6 +1178,20 @@ function undo(): void {
   out();
 }
 
+function editDirectRule(): void {
+  const n = Number(args.rest[1]);
+  const text = args.rest.slice(2).join(' ').trim();
+  if (!Number.isInteger(n) || !text) throw new Error('usage: stet rule edit <n> "<the sharper line>"');
+  const before = readRules(root).find((r) => r.n === n);
+  if (!before) throw new Error(`there is no rule ${n} — run \`stet rules\` to see what there is`);
+  const after = reviseRule(root, n, text);
+  sync(root, readRules(root), { budget });
+  out(`  ${dim(`was`)} ${dim(before.text)}`);
+  out(`  ${warm(String(n))}  ${after.text}`);
+  const weak = weakness(after.text);
+  if (weak) out(`  ${warm('!')} ${dim(weak)}`);
+}
+
 function removeDirectRule(): void {
   const n = Number(args.rest[1]);
   if (!Number.isInteger(n)) throw new Error('usage: stet rule remove <n>   (see `stet rules` for numbers)');
@@ -1191,6 +1205,10 @@ function removeDirectRule(): void {
 function directRule(): void {
   // `stet rule remove 3` — the canon is the product, so it needs an eraser.
   if (args.rest[0] === 'remove') return removeDirectRule();
+  // …and a pencil. Sharpening was reachable only from the page, in the seconds
+  // after a reveal. A rule whose wording goes stale a week later could then be
+  // deleted or hand-edited, which is the same answer that made `undo` necessary.
+  if (args.rest[0] === 'edit') return editDirectRule();
   const text = args.rest.join(' ').trim();
   if (!text) throw new Error('usage: stet rule "never centre the hero" [--globs src/web/**] [--tag design]');
   init(root);
@@ -1230,6 +1248,7 @@ function help(): void {
   ${cool('stet undo')} [<id>]            take back the last verdict, and the rule it earned
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
+  ${cool('stet rule edit')} <n> "<line>"  sharpen a rule's wording later
   ${cool('stet rule remove')} <n>        delete a rule from the canon
   ${cool('stet note')} "<fact>" --globs   record what this repo taught, delivered where it applies
   ${cool('stet notes')}                    print them  ${dim('·')}  ${cool('stet note remove')} <n>
