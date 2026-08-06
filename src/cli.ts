@@ -420,6 +420,19 @@ async function claude(): Promise<void> {
     out(`    ${missing.join(', ')}`);
     out(`    they will fire and do nothing. ${cool('npm i -g stetmark@latest')}${dim(', then re-run stet claude')}`);
   }
+  // The single most important next action, and stet never said it. Claude Code
+  // takes a snapshot of hooks when a session starts — deliberately, so settings
+  // cannot be swapped underneath a running one — so nothing here is live until
+  // a session begins after this moment. Someone who wires from inside a running
+  // session and keeps working sees no gate at all and concludes it does not
+  // work. Both cases are stated because they are genuinely different: a new
+  // folder needs no restart, only a start.
+  out();
+  out(`  ${warm('these are not live yet.')} Claude Code loads hooks when a session starts.`);
+  out(`    ${dim('starting Claude Code here for the first time?')} nothing to do — just start it.`);
+  out(`    ${dim('already have one open in this folder?')} exit and run ${cool('claude')} again.`);
+  out();
+  out(`  ${dim('then')} ${cool('stet claude status')} ${dim('will show them actually firing.')}`);
   out(`  ${dim('undo with')} stet claude remove`);
   out();
 }
@@ -1024,7 +1037,7 @@ function ago(ms: number): string {
   return `${Math.round(h / 24)} days ago`;
 }
 
-function status(): void {
+async function status(): Promise<void> {
   const pending = listEntries(root, 'pending');
   const rules = readRules(root);
   const broken = pending.filter((e) => !e.ok);
@@ -1062,6 +1075,18 @@ function status(): void {
   const scoped = rules.filter((r) => r.globs.length).length;
   out(`  ${cool(String(rules.length))} ${rules.length === 1 ? 'rule' : 'rules'} in the canon${scoped ? dim(`, ${scoped} scoped to paths`) : ''}`);
   if (ok.length) out(dim('  run `stet` to judge them'));
+
+  // Wired but never called is the state everyone lands in right after `stet
+  // claude`, and nothing said so — this command reported a healthy, empty
+  // project while none of the gate was actually running.
+  const { installed } = await import('./claude.js');
+  const { lastFired } = await import('./hooks.js');
+  if ((installed(root, 'local') || installed(root, 'project')) && !Object.keys(lastFired(root)).length) {
+    out();
+    out(`  ${warm('!')} wired, but no hook has ever been called here.`);
+    out(`    ${dim('Claude Code loads hooks when a session starts — start it in this folder,')}`);
+    out(`    ${dim('or exit and run `claude` again if one is already open.')}`);
+  }
   out();
 }
 

@@ -7,6 +7,7 @@ import { addItem, blind, decide, describeProblem, init, listEntries, readEntry, 
 import { appendRule, appendDirectRule, bumpHits, estimateTokens, parseRules, readRules, renderBlock, reviseRule, ruleLine, selectRules, weakness } from '../src/rules.js';
 import { hasBlock, insert, remove, sync, unsync } from '../src/sync.js';
 import { PAGE } from '../src/page.js';
+import { runHook } from '../src/hooks.js';
 import { problems } from '../src/validate.js';
 import { METHOD } from '../src/method.js';
 import { matchesAny } from '../src/glob.js';
@@ -933,5 +934,41 @@ describe('the source has no dead ends', () => {
       }
     }
     expect(dead, 'exported and never referenced').toEqual([]);
+  });
+});
+
+// ── when the wiring becomes live ───────────────────────────────────────────
+// Claude Code snapshots hooks at session start, deliberately, so settings
+// cannot be swapped underneath a running session. Nothing stet writes is live
+// until a session begins after it — and stet never said so, which leaves people
+// wiring from inside a running session, seeing no gate, and concluding it does
+// not work.
+describe('telling people when the gate starts working', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 15_000 });
+  const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+  it('says it at the moment of wiring, and distinguishes the two cases', () => {
+    const outp = plain(run(['claude', '--command', 'stet']).stdout);
+    expect(outp).toMatch(/not live yet/);
+    // A fresh folder needs a start, not a restart. Telling everyone to restart
+    // sends people to fix something that is not broken.
+    expect(outp).toMatch(/first time\? nothing to do/);
+    expect(outp).toMatch(/already have one open.*claude.*again/);
+  });
+
+  it('keeps saying it in status until a hook has actually been called', () => {
+    run(['claude', '--command', 'stet']);
+    expect(plain(run(['status']).stdout)).toMatch(/no hook has ever been called/);
+  });
+
+  it('stops saying it once one has', () => {
+    run(['claude', '--command', 'stet']);
+    runHook(root, 'session-start', { session_id: 'live', cwd: root });
+    expect(plain(run(['status']).stdout)).not.toMatch(/no hook has ever been called/);
+  });
+
+  it('says nothing about it in a project that was never wired', () => {
+    expect(plain(run(['status']).stdout)).not.toMatch(/no hook has ever been called/);
   });
 });

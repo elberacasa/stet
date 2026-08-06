@@ -1875,6 +1875,62 @@ that fails.
 
 ---
 
+## Finding 51 — the gate is not on until the next session, and nothing said so
+
+Setting up a fresh project to test the tool honestly, the transcript ran:
+
+```
+$ stet init          initialised .stet
+$ stet claude        stet is now a gate in this repo, not a suggestion.
+$ stet status        nothing waiting on you · 0 rules in the canon
+```
+
+Three commands, all reporting success, and the gate was not running. Nothing in
+any of that output says when it will be.
+
+Claude Code loads hooks when a session starts and snapshots them — deliberately,
+so a settings file cannot be swapped underneath a session that is already
+running. Its own documentation is explicit:
+
+> **Important:** Hooks are loaded when Claude Code session starts. Changes to
+> hook configuration require restarting Claude Code.
+
+There is no bypass, and there should not be. It is a security property, not a
+gap. What is a gap is a tool that writes a configuration, prints *"stet is now a
+gate in this repo, not a suggestion"*, and never mentions that the sentence is
+not true yet.
+
+The failure mode is specific and quiet: someone wires from inside a running
+session, keeps working, sees no gate, and concludes the tool does not work.
+
+### The distinction that matters
+
+The obvious fix — "restart Claude Code" — is wrong half the time. A folder that
+has never had a session needs no restart, only a start. Telling everyone to
+restart sends people to fix something that is not broken, which is its own kind
+of noise.
+
+`stet claude` now ends on the two cases separately:
+
+```
+  these are not live yet. Claude Code loads hooks when a session starts.
+    starting Claude Code here for the first time? nothing to do — just start it.
+    already have one open in this folder? exit and run claude again.
+
+  then stet claude status will show them actually firing.
+```
+
+And `stet status` repeats it, but only while it is true — wired, with no hook
+ever called. The moment one fires, it goes quiet. A warning that outlives its
+condition is the kind people learn to skim past.
+
+This was only findable by setting the tool up the way a stranger would, in a
+directory that had never seen it, and reading what came back rather than what
+was expected. That is finding 23 through 27 again, in the onboarding rather than
+the package.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1927,6 +1983,7 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 51 | setting up a fresh project | `stet claude` printed "stet is now a gate in this repo" while the gate would not run until the next session — Claude Code snapshots hooks at startup, and nothing in three successful commands said so |
 | 50 | **working under its own gate** | the instruction telling an agent to ask lived only in `AGENTS.md` — a file Claude Code is not documented to read, and which stet writes `CLAUDE.md` alongside only if one already exists. Everything else travelled on a hook proven to fire |
 | 48 | a dead-export scan | `restatesOption` was exported and never called for two releases — written alongside a real fix and never wired, the same species as finding 40 |
 | 49 | the fix for 47 | the guard asserted the checkout had *no* hook markers, which fails the moment a developer works in this repo under its own gate — it had to assert the suite *changed* none |
@@ -1937,7 +1994,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-two reported success while broken.
+other forty-three reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

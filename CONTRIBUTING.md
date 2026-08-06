@@ -74,8 +74,10 @@ get the canon at session start, scoped rules at the moment you write a matching
 file, and `.stet/NOTES.md` — the landmines this codebase has already taught
 somebody — delivered when you touch the file they are about.
 
-If `status` says nothing has ever been called, hooks load at session start:
-restart Claude Code.
+If `status` says nothing has ever been called, hooks load at session start —
+Claude Code snapshots them deliberately, so settings cannot change underneath a
+running session. Start Claude Code in this folder, or exit and run `claude`
+again if one is already open.
 
 `.stet/RULES.md`, `.stet/NOTES.md` and `.stet/decided/` are committed — the
 canon, the landmines, and the decisions they were earned from.

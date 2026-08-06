@@ -180,6 +180,14 @@ which is the exact thing this exists to replace.
 stet claude          # wire it in     ·  stet claude remove  ·  stet claude status
 ```
 
+**Wire it before you start Claude Code, or restart after.** Claude Code takes a
+snapshot of hooks when a session begins — deliberately, so settings cannot be
+swapped underneath a running session — so nothing is live until a session starts
+after wiring. In a new project that means nothing extra to do: run the two
+commands, then start Claude Code. If a session is already open in that folder,
+exit and run `claude` again. `stet claude status` tells you which hooks have
+actually been called, so you are never guessing about it.
+
 `stet claude status` answers three questions, and the third is the one that
 matters:
 
