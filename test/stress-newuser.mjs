@@ -238,6 +238,54 @@ console.log('\n7. the whole loop in one command');
   srv.kill('SIGKILL');
 }
 
+// ── the sixty-second tour, from the tarball ───────────────────────────────
+console.log('\n8. stet demo, on a machine with nothing set up');
+{
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-nothing-'));
+  const p = spawn('node', [BIN, 'demo', '--no-open', '--port', '0'], { cwd: empty, stdio: ['ignore', 'pipe', 'pipe'] });
+  let seen = '';
+  p.stdout.on('data', (d) => (seen += d));
+  p.stderr.on('data', (d) => (seen += d));
+  const base = await new Promise((done) => {
+    const t = setTimeout(() => done(null), 15_000);
+    const tick = setInterval(() => {
+      const m = /http:\/\/127\.0\.0\.1:(\d+)\//.exec(seen.replace(/\x1b\[[0-9;]*m/g, ''));
+      if (m) { clearTimeout(t); clearInterval(tick); done(`http://127.0.0.1:${m[1]}`); }
+    }, 200);
+  });
+  ok('the example decisions shipped with the package', !/without its example decisions/.test(seen),
+    /without its example decisions/.test(seen) ? 'fixtures missing from the tarball' : 'present');
+  ok('it serves', !!base, base ?? seen.slice(0, 120));
+
+  if (base) {
+    const state = await (await fetch(`${base}/api/state`)).json();
+    ok('with several decisions to judge', state.pending.length >= 5, `${state.pending.length} pending`);
+    ok('none of which tell the page which is which', !state.pending.some((e) => e.ok && 'map' in e.item));
+    ok('and it opens on the live one', state.pending[0]?.id === 'signup-live', state.pending[0]?.id ?? 'none');
+
+    // Every local file a variant points at must actually be served, or the
+    // tour opens on two blank frames.
+    let checked = 0;
+    let missing = 0;
+    for (const e of state.pending) {
+      for (const v of e.item.variants ?? []) {
+        for (const b of v.blocks ?? []) {
+          const local = [b.src, b.href].find((x) => x && !/^[a-z][a-z0-9+.-]*:/i.test(x));
+          if (!local) continue;
+          checked++;
+          const r = await fetch(`${base}/a/${e.id}/${local}`);
+          if (!r.ok) missing++;
+        }
+      }
+    }
+    ok('every asset a variant points at is served', missing === 0, `${checked} checked, ${missing} missing`);
+  }
+  ok('and it wrote nothing into the directory it was run from', fs.readdirSync(empty).length === 0,
+    fs.readdirSync(empty).join(',') || 'still empty');
+  p.kill('SIGKILL');
+  fs.rmSync(empty, { recursive: true, force: true });
+}
+
 console.log(`\n${fail.length ? `FAILED (${fail.length}): ${fail.join(' | ')}` : 'the packaged artifact works end to end for a new user'}`);
 fs.rmSync(home, { recursive: true, force: true });
 fs.rmSync(SP, { recursive: true, force: true });

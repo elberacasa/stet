@@ -819,6 +819,77 @@ attached at spawn now.
 
 ---
 
+## The first sixty seconds
+
+The loop works, the artifact is verified, and asking now costs one line. None of
+that helps the person who runs `npx stetmark` in a repo, reads **nothing
+pending**, and closes the tab. Everything stet does is visual, and seeing any of
+it required already having an agent wired *and* a decision queued.
+
+There were already seven worked examples in `fixtures/` — two live signup flows,
+matched hero screenshots, an empty state, error copy, an audio pair, an API
+envelope, a retry diff. They were used for testing and shipped to nobody.
+
+`stet demo` copies them into a temporary directory and serves them. Through the
+real intake, not a shortcut: labels shuffled, assets renamed after the shuffle,
+map withheld. A demo that is not blind is not the product. Nothing is written to
+the repo you are standing in, and no verdict there binds anything.
+
+### Finding 27 — the one block kind that could not carry a file
+
+`signup-live` is the decision that matters most in that set, because it is the
+one nothing else can do: two running pages, side by side, click through both.
+
+Both frames rendered as blank white boxes, and `/a/signup-live/variant-a.html`
+returned **404**.
+
+Local files are copied into the decision's own directory on intake and renamed
+after the label they were shuffled into. That is finding 8's fix, and it covers
+`image` and `audio`:
+
+```ts
+if (block.kind !== 'image' && block.kind !== 'audio') return block;
+```
+
+`url` was never added. So a `url` block pointing at a relative path was neither
+copied — the file was not there to serve, hence the blank frame — nor renamed,
+which means a real user's `hero-serif.html` beside `hero-sans.html` would sit in
+the DOM announcing which variant was which. Broken and leaking, in the kind the
+one-line ask reaches for first.
+
+### Finding 28 — a source file that was binary to every search tool
+
+While tracing how pending items are ordered I ran `grep -n "listEntries"
+src/store.ts` and got nothing. The file is 11KB of TypeScript and the function
+is in it.
+
+`rg` explained it: *binary file matches (found "\0" byte around offset 4594)*.
+
+The sort key separates a timestamp from an id with a NUL, and it had been
+written as a **raw byte** rather than the escape `\u0000`. Both compile to the
+same thing. But one of them makes grep, ripgrep, diff and GitHub's code viewer
+treat the entire file as binary and return nothing for every search in it —
+silently, which is how it survived this long. `store.ts` is the file with the
+blind guarantee in it.
+
+Now an escape, and a test asserts no source file contains a raw NUL.
+
+### Two things I was wrong about, and checked
+
+The demo opened on the API-envelope decision, because pending items sort by
+`created` and seven queued in the same millisecond fall back to sorting by id.
+Alphabetically that is `api-shape` — the least representative thing here — as
+the first thing a newcomer sees. They are stamped a minute apart now, opening on
+the live pair.
+
+And when the live frames looked blank in a screenshot, I nearly logged a second
+bug. The content is centred in a 500px frame and I had only looked at the top
+half of it. It was fine. Scrolling first cost ten seconds; the finding would
+have been wrong in a document whose whole claim is that it reports what actually
+happened.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -857,12 +928,15 @@ Not one of these was visible from reading the code.
 | 29 | a test I expected to pass | `localhost:5173` parses as scheme `localhost`, path `5173` — the URL was left unmodified while `127.0.0.1:5173` was fixed |
 | 30 | fixing a flaky harness | `--port 0` — "let the OS choose" — was read as unset by `Number(v) \|\| undefined` and became the default port, where callers raced |
 | 31 | the same flaky harness | a `close` listener attached after the child had already exited, waiting forever for an event that had fired — the race stet's own `await` had |
+| 32 | `stet demo` | `url` was the one block kind never absorbed on intake: a relative href was neither copied in (blank frame, 404) nor renamed (the filename announced the variant) |
+| 33 | a grep that found nothing | a raw NUL byte in `src/store.ts` made the file read as binary, so every search in it silently returned nothing |
+| 34 | the demo's first screen | seven items queued in one millisecond tie on `created` and fall back to sorting by id, opening the tour on an API envelope |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Seven of the thirty-one
+invisible from the code and obvious from the use.** Seven of the thirty-four
 announced themselves — 5, 6, 7, 14, 24, 26 and 31 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other twenty-four reported success while broken.
+other twenty-seven reported success while broken.
 
 Number 31 is worth its own line, because it is the only one I had already
 fixed. The check-then-watch race closed inside `stet await` came back in the

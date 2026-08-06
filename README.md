@@ -9,12 +9,23 @@
 ![stet — flip two variants in the same frame, commit a verdict, and watch it become a rule every agent obeys](docs/stet.gif)
 
 ```bash
+npx stetmark demo     # seven real decisions to judge, right now, in a scratch copy
+```
+
+Then, in a repo you care about:
+
+```bash
 npx stetmark          # run it in any repo
 npm i -g stetmark     # then the command is just: stet
 ```
 
 Zero runtime dependencies. Nothing leaves your machine. No account, no key, no
 network.
+
+`demo` is the whole product on real decisions — two signup flows running side by
+side, matched screenshots, a diff, an audio pair — shuffled and blind exactly as
+a live one would be. It runs in a temporary directory, so nothing is written to
+the repo you're standing in and no verdict you give there binds anything.
 
 ---
 

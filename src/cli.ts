@@ -2,6 +2,7 @@
 // stet — the command. Hand-rolled arg parsing, zero dependencies.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +88,7 @@ const FLAGS: Record<string, string[]> = {
   claude: ['project', 'remove', 'command'],
   churn: ['threshold'],
   capture: ['views', 'out', 'json', 'settle'],
+  demo: ['port', 'no-open'],
   init: [],
   schema: [],
   version: [],
@@ -174,6 +176,8 @@ async function main(): Promise<void> {
       return doInit();
     case 'capture':
       return doCapture();
+    case 'demo':
+      return demo();
     case 'version':
     case '-v':
       return out(VERSION());
@@ -330,6 +334,78 @@ async function claude(): Promise<void> {
   }
   out(`  ${dim('undo with')} stet claude remove`);
   out();
+}
+
+/**
+ * The sixty-second answer to "what is this, actually".
+ *
+ * Everything stet does is visual and none of it can be felt from a README. But
+ * seeing it required already having an agent wired and a decision queued, so a
+ * new arrival ran `stet` in their repo, read "nothing pending", and left.
+ *
+ * This runs the real thing on real decisions — every block kind, shuffled on
+ * intake, blind exactly as a live one would be — in a temporary directory, so
+ * nothing is written to the repo the person is standing in and no verdict they
+ * give here binds anything.
+ */
+async function demo(): Promise<void> {
+  const from = fileURLToPath(new URL('../fixtures', import.meta.url));
+  // Deliberate order, not alphabetical. The first screen decides whether anyone
+  // looks at the second, and alphabetical opened on an API envelope — the least
+  // representative thing here. Lead with two running pages side by side.
+  const ORDER = ['signup-live', 'hero-type', 'empty-state', 'error-copy', 'town-loop', 'api-shape', 'retry-policy'];
+  const rank = (d: string): number => (ORDER.indexOf(d) + 1 || ORDER.length + 1);
+  let ids: string[];
+  try {
+    ids = fs
+      .readdirSync(from)
+      .filter((d) => fs.existsSync(path.join(from, d, 'item.json')))
+      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  } catch {
+    throw new Error('this build shipped without its example decisions');
+  }
+  if (!ids.length) throw new Error('this build shipped without its example decisions');
+
+  const here = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-demo-'));
+  init(here);
+  // Pending items are ordered by when they were queued, and seven queued in the
+  // same millisecond fall back to sorting by id — which is how the tour opened
+  // on an API envelope. Stamp them a minute apart so the intended order holds.
+  const base = Date.now() - ids.length * 60_000;
+  ids.forEach((id, i) => {
+    const dir = path.join(from, id);
+    const item = JSON.parse(fs.readFileSync(path.join(dir, 'item.json'), 'utf8')) as Item;
+    item.created = new Date(base + i * 60_000).toISOString();
+    // Through the same intake as a real decision: labels shuffled, assets
+    // renamed after the shuffle. A demo that is not blind is not the product.
+    addItem(here, item, { from: dir });
+  });
+
+  out();
+  out(`  ${warm('stet')} ${dim('— let it stand.')}  ${dim(VERSION())}`);
+  out();
+  out(`  ${ids.length} real decisions, waiting on you. Judge them the way you would your own:`);
+  out(`  ${dim('press')} A ${dim('or')} B${dim(', say why in one line, then sharpen it once you see what you picked.')}`);
+  out();
+  out(`  ${dim('This is a scratch copy in')} ${here}`);
+  out(`  ${dim('Nothing here touches the repo you are standing in.')}`);
+
+  const server = await serveDemo(here);
+  out();
+  out(`  ${cool(server.url)}`);
+  out();
+  if (!args.flags['no-open']) open(server.url);
+  process.on('SIGINT', () => {
+    server.close();
+    fs.rmSync(here, { recursive: true, force: true });
+    out();
+    process.exit(0);
+  });
+}
+
+async function serveDemo(here: string) {
+  const { serve } = await import('./server.js');
+  return serve(here, { port: portOf(args.flags.port), budget });
 }
 
 /**
@@ -871,6 +947,7 @@ function help(): void {
   ${cool('stet ask')} < item.json        the long form, for anything the flags cannot say
   ${cool('stet init')}                   start a project here, even inside another one
   ${cool('stet capture')} A=<url> B=<url>  matched screenshots of every variant at every view
+  ${cool('stet demo')}                   seven real decisions to judge, in a scratch copy
   ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon

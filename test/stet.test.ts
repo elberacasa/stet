@@ -531,3 +531,92 @@ describe('what the page shows before a verdict', () => {
     expect(PAGE).toMatch(/revealed\?esc\(b\.href/);
   });
 });
+
+// ── local files a variant points at ────────────────────────────────────────
+describe('assets a variant brings with it', () => {
+  const write = (name: string, body = 'x') => {
+    const f = path.join(root, name);
+    fs.writeFileSync(f, body);
+    return name;
+  };
+
+  it('copies a url block\'s local file in and renames it after the shuffled label', () => {
+    // `url` was excluded from this for as long as it existed, which made it the
+    // one kind that both failed to load from a relative path — the file was
+    // never copied, so the frame rendered nothing — and leaked its own name.
+    write('hero-serif.html', '<b>serif</b>');
+    write('hero-sans.html', '<b>sans</b>');
+    addItem(root, {
+      id: 'live', question: 'Which hero?',
+      map: { A: 'serif', B: 'sans' },
+      variants: [
+        { label: 'A', blocks: [{ kind: 'url', href: 'hero-serif.html' }] },
+        { label: 'B', blocks: [{ kind: 'url', href: 'hero-sans.html' }] },
+      ],
+    } as Item, { from: root });
+
+    const dir = path.join(root, '.stet/pending/live');
+    const item = JSON.parse(fs.readFileSync(path.join(dir, 'item.json'), 'utf8')) as Item;
+    const hrefs = item.variants.map((v) => (v.blocks[0] as { href: string }).href);
+    for (const h of hrefs) {
+      expect(h, 'the source filename is the answer to the blind test').not.toMatch(/serif|sans/);
+      expect(fs.existsSync(path.join(dir, h)), `${h} must be there to serve`).toBe(true);
+    }
+  });
+
+  it('leaves a url block pointing at someone else\'s server alone', () => {
+    addItem(root, {
+      id: 'remote', question: 'Which?',
+      map: { A: 'a', B: 'b' },
+      variants: [
+        { label: 'A', blocks: [{ kind: 'url', href: 'http://localhost:5173/?v=a' }] },
+        { label: 'B', blocks: [{ kind: 'url', href: 'http://localhost:5173/?v=b' }] },
+      ],
+    } as Item, { from: root });
+    const item = JSON.parse(fs.readFileSync(path.join(root, '.stet/pending/remote/item.json'), 'utf8')) as Item;
+    for (const v of item.variants) expect((v.blocks[0] as { href: string }).href).toMatch(/^http:\/\/localhost:5173/);
+  });
+});
+
+// ── the demo ───────────────────────────────────────────────────────────────
+describe('the example decisions the demo runs on', () => {
+  const dir = path.join(process.cwd(), 'fixtures');
+
+  it('ships with the package', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as { files: string[] };
+    expect(pkg.files, '`stet demo` reads these at runtime').toContain('fixtures');
+  });
+
+  it('is a set every one of which stet would accept from an agent', () => {
+    const ids = fs.readdirSync(dir).filter((d) => fs.existsSync(path.join(dir, d, 'item.json')));
+    expect(ids.length).toBeGreaterThan(3);
+    for (const id of ids) {
+      const item = JSON.parse(fs.readFileSync(path.join(dir, id, 'item.json'), 'utf8')) as unknown;
+      expect(problems(item), `fixtures/${id} would be refused`).toEqual([]);
+    }
+  });
+
+  it('has every local file each variant points at', () => {
+    for (const id of fs.readdirSync(dir).filter((d) => fs.existsSync(path.join(dir, d, 'item.json')))) {
+      const item = JSON.parse(fs.readFileSync(path.join(dir, id, 'item.json'), 'utf8')) as Item;
+      for (const v of item.variants) {
+        for (const b of v.blocks as { src?: string; href?: string }[]) {
+          const local = [b.src, b.href].find((x) => x && !/^[a-z][a-z0-9+.-]*:/i.test(x));
+          if (local) expect(fs.existsSync(path.join(dir, id, local)), `fixtures/${id}/${local}`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+// ── the source itself ──────────────────────────────────────────────────────
+describe('the source', () => {
+  it('contains no raw NUL byte, which would make a file read as binary', () => {
+    // store.ts used a literal NUL as a sort-key separator, so grep, ripgrep,
+    // diff and GitHub's viewer all treated the file as binary and silently
+    // returned nothing for every search in it. The escape compiles the same.
+    for (const f of fs.readdirSync('src').filter((n) => n.endsWith('.ts'))) {
+      expect(fs.readFileSync(path.join('src', f)).includes(0), `src/${f}`).toBe(false);
+    }
+  });
+});
