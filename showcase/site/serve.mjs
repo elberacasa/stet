@@ -20,7 +20,11 @@ const TYPES = {
 
 http
   .createServer((req, res) => {
-    const rel = (req.url === '/' ? '/index.html' : req.url).split('?')[0];
+    // Strip the query first. Checking for '/' before stripping meant '/?v=2'
+    // resolved to the directory itself and was refused by the traversal guard,
+    // so any cache-busting link 403'd.
+    const clean = req.url.split('?')[0].split('#')[0];
+    const rel = clean === '/' ? '/index.html' : clean;
     const file = path.join(dir, decodeURIComponent(rel));
     if (!path.resolve(file).startsWith(path.resolve(dir) + path.sep)) {
       res.writeHead(403, { 'content-type': 'text/plain' }).end('no');

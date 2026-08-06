@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>stet — your agents ask once, your answer stands</title>
+<title>stet — Claude Code cannot be told to stop guessing. It can be stopped.</title>
 <meta name="description" content="Coding agents guess at forks with no right answer. stet refuses the write, asks you once, and makes your verdict binding on every agent that touches the repo. Local, zero dependencies, no keys.">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -228,6 +228,7 @@ section.tint .loopback span{background:var(--bg-2)}
     <a href="#insight">The insight</a>
     <a href="#gate">The gate</a>
     <a href="#numbers">Numbers</a>
+    <a href="#proof">Proof</a>
   </div>
   <div class="sp"></div>
   <a class="pill" href="https://github.com/elberacasa/stet">★ github</a>
@@ -253,27 +254,31 @@ section.tint .loopback span{background:var(--bg-2)}
   </div>
 
   <div class="deny"><span class="tool"><span class="bullet">⏺</span> Update(src/components/DeleteButton.tsx)</span>
-  <span class="res">⎿</span>  <b>Error: stet — this path is waiting on a decision you have not made.</b>
+  <span class="res">⎿</span>  <b>Error: stet: this path is governed by a decision the human has not made yet.</b>
 
-     <i>delete-flow</i> — "Should deleting ask first, or just be undoable?"
-     claims: src/components/**
+       <i>delete-flow</i> — "Should deleting ask first, or just be undoable?"
+       claims: src/components/**
 
-     Do not implement either option yet. Whichever I pick has a 50% chance
-     of being thrown away. I will work elsewhere, or block on your verdict:
+     Do not implement either option yet — whichever you pick has a 50% chance of
+     being thrown away. Either work somewhere else, or block on the verdict with:
        <span class="g">stet await delete-flow</span></div>
 
-  <h1>Your agent stopped,<br>because <em>only you</em><br>can answer this.</h1>
+  <h1>Claude Code cannot be <em>told</em><br>to stop guessing.<br>It can be <em>stopped.</em></h1>
 
-  <p class="body">Ten seconds later a page opens showing both versions of your actual
-  screen. You look, you pick, you say why in one line. The agent carries on with your
-  answer — and <b style="color:var(--ink);font-weight:400">never asks you that question
-  again</b>, in this session or any future one, in any agent you use.</p>
+  <p class="body">Every other human-in-the-loop tool writes a sentence into a file and hopes —
+  CLAUDE.md, memory, rules files. All suggestions, read once at the top of a session, competing
+  with every token that arrives after. <b style="color:var(--ink);font-weight:400">An instruction
+  can be ignored. A denied tool call cannot.</b></p>
+
+  <p class="body">Ten seconds after that refusal, a page opens showing both versions of your
+  actual screen, running. You look, you pick, you say why in one line. The agent carries on with
+  your answer — and never asks you that question again, in this session or any future one.</p>
 
   <div class="ctas">
-    <button class="cmd" id="copy" type="button"><span class="p">$</span> npx stetmark <span class="hint" id="hint">⧉ copy</span></button>
+    <button class="cmd" id="copy" type="button"><span class="p">$</span> npx stetmark@latest demo <span class="hint" id="hint">⧉ copy</span></button>
     <a class="pill" href="https://github.com/elberacasa/stet">★ Star on GitHub</a>
   </div>
-  <p class="free">Zero runtime dependencies · nothing leaves your machine · no account, no key, no network</p>
+  <p class="free">Built for Claude Code — six hooks, two slash commands · zero runtime dependencies · nothing leaves your machine · no account, no key, no network</p>
 </div></header>
 
 <!-- ═══ THE MOMENT — show the product, not the mechanism ═══ -->
@@ -286,7 +291,7 @@ section.tint .loopback span{background:var(--bg-2)}
   obvious in the flicker.</p>
 
   <figure class="shot">
-    <img src="loop.gif" alt="The stet decision screen: two versions of a landing page hero flipping in the same frame, a verdict committed, the reveal showing what each variant actually was, and the rule entering the canon" loading="lazy">
+    <img src="loop.gif" alt="The stet decision screen: two signup flows running side by side, a verdict committed blind, the reveal showing what each variant actually was, and the rule entering the canon" loading="lazy">
     <figcaption>The real screen, recorded. <b>Labels are shuffled</b> — while you are choosing,
     neither you nor the agent knows which approach is which, so you judge the work and not the
     idea you already liked. What A and B actually were is revealed only after you commit, and
@@ -518,6 +523,35 @@ section.tint .loopback span{background:var(--bg-2)}
   </figure>
 </div></section>
 
+<!-- ═══ PROOF — the claim a skeptic can check ═══ -->
+<section id="proof"><div class="wrap">
+  <div class="label">does it actually work</div>
+  <h2>Forty-five bugs. <em>Thirty-seven of them</em> reported success while broken.</h2>
+  <p class="body">stet was built under its own gate, and every failure found along the way is
+  written down as it happened — including the embarrassing ones, the two that were reported and
+  turned out not to reproduce, and the one that was fixed and then reintroduced by the person who
+  fixed it.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">45</div><div class="lbl">bugs found by <b>using</b> the tool. Not one of them was visible from reading the code.</div></div>
+    <div class="stat"><div class="num">8</div><div class="lbl">that announced themselves — a crash, a hang, a non-zero exit. The boring kind.</div></div>
+    <div class="stat"><div class="num">37</div><div class="lbl">that ran green while broken. Every automated signal said fine.</div></div>
+  </div>
+
+  <p class="body">A capture with the right dimensions and the wrong picture. Two live previews
+  that rendered blank. A hook wired to an event Claude Code does not emit, which never fired once
+  and passed a green status check for the life of the project. A published package that
+  identified itself as the previous version. Every scoped rule containing a full stop —
+  <span style="color:var(--dim)">package.json</span>,
+  <span style="color:var(--dim)">**/*.test.ts</span> — silently governing nothing.</p>
+
+  <p class="body">That is the shape of the problem an agent has, and it is not solved by being
+  careful. Eight of those lessons ship as installable rules:
+  <span style="color:var(--dim)">stet method</span>.</p>
+
+  <p class="body"><a href="https://github.com/elberacasa/stet/blob/main/showcase/JOURNAL.md">Read the build journal →</a></p>
+</div></section>
+
 <!-- ═══ LOOP ═══ -->
 <section><div class="wrap">
   <div class="label">the loop</div>
@@ -565,7 +599,7 @@ section.tint .loopback span{background:var(--bg-2)}
 </div></section>
 
 <footer><div class="wrap">
-  <div class="bigcmd"><span class="p">$</span> npx stetmark</div>
+  <div class="bigcmd"><span class="p">$</span> npx stetmark@latest demo</div>
   <div class="flinks">
     <a href="https://github.com/elberacasa/stet">github</a>
     <a href="https://www.npmjs.com/package/stetmark">npm</a>
@@ -579,7 +613,7 @@ section.tint .loopback span{background:var(--bg-2)}
 
 <script>
   document.getElementById('copy').addEventListener('click', function () {
-    navigator.clipboard.writeText('npx stetmark').then(function () {
+    navigator.clipboard.writeText('npx stetmark@latest demo').then(function () {
       var h = document.getElementById('hint');
       h.textContent = '✓ copied';
       h.style.color = '#79c2b2';

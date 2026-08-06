@@ -1,6 +1,12 @@
 # stet
 
-**Your agents ask once. Your answer stands.**
+**Claude Code cannot be told to stop guessing. It can be stopped.**
+
+Your agent hits a fork with no right answer — which type, which copy, modal or
+page — and it does what it was trained to do: it picks one and keeps going. You
+find out three hours later. stet turns that fork into a *denied tool call*, puts
+the two options in front of you as the real running thing, and turns your answer
+into a rule every future agent obeys without asking.
 
 > `stet` — Latin, *"let it stand."* The proofreader's mark: an editor proposes
 > a change, and the author writes `stet` in the margin to overrule it and make
@@ -9,32 +15,46 @@
 ![stet — two signup flows running side by side, judged blind; the verdict reveals which was which and becomes a rule every agent obeys](docs/stet.gif)
 
 ```bash
-npx stetmark@latest demo   # seven real decisions to judge, right now, in a scratch copy
+npx stetmark@latest demo
 ```
 
-Then, in a repo you care about:
+Seven real decisions, judged blind, in about ten seconds. Nothing is installed,
+nothing in your repo is touched.
 
-```bash
-npx stetmark@latest   # run it in any repo
-npm i -g stetmark     # then the command is just: stet
+```
+⏺ Update(src/components/DeleteButton.tsx)
+  ⎿  Error: stet: this path is governed by a decision the human has not made yet.
+
+     delete-confirm — "Modal or inline undo?"
+     claims: src/components/**
+
+     Do not implement either option yet — whichever you pick has a 50% chance of
+     being thrown away. Either work somewhere else, or block on the verdict with:
+       stet await delete-confirm
 ```
 
-The `@latest` is not decoration. `npx stetmark` will happily run whatever
-version npm cached on that machine months ago, and a first run that fails
-because the binary predates the command you typed is the worst possible
-introduction — it happened to the first person who tried it. stet never talks to
-the network, so it cannot tell you it is out of date; pinning `@latest` is the
-fix that does not cost you a network call on every run.
+**Every other human-in-the-loop tool writes a sentence into a file and hopes.**
+`CLAUDE.md`, `AGENTS.md`, memory, rules files — all of them are suggestions,
+read once at the top of a session, competing with every token that arrives
+after. An instruction can be ignored. A denied tool call cannot.
 
-Zero runtime dependencies. Nothing leaves your machine. No account, no key, no
-network.
-
-`demo` is the whole product on real decisions — two signup flows running side by
-side, matched screenshots, a diff, an audio pair — shuffled and blind exactly as
-a live one would be. It runs in a temporary directory, so nothing is written to
-the repo you're standing in and no verdict you give there binds anything.
+Built for Claude Code: six hooks, two slash commands. Zero runtime dependencies,
+no account, no key, and nothing ever leaves your machine.
 
 ---
+
+## Install
+
+```bash
+npm i -g stetmark     # then the command is just: stet
+stet                  # run it in any repo — first run initialises and wires
+```
+
+Pin `@latest` on any `npx` form. `npx stetmark` will happily run whatever version
+npm cached on that machine months ago, and a first run that fails because the
+binary predates the command you typed is the worst possible introduction — it
+happened to the first person who tried it. stet never talks to the network, so it
+cannot tell you it is stale.
 
 ## The problem
 
@@ -148,15 +168,13 @@ deterministically, when a rule can't survive on its own:
    teaches its own shape                                     ← binding
 ```
 
-## Built for Claude Code
+## Claude Code: a gate, not a suggestion
 
 stet is aimed at Claude Code specifically. It writes a vendor-neutral
-`AGENTS.md` and will sync into other agents' surfaces, and that still works —
-but every mechanism below is a Claude Code hook, and that is where the effort
-goes. A tool that hedges across five agents ends up being a text file for all of
-them, which is the exact thing this exists to replace.
-
-## Claude Code: a gate, not a suggestion
+`AGENTS.md` and syncs into other agents' surfaces, and that still works — but
+every mechanism below is a Claude Code hook, and that is where the effort goes.
+A tool that hedges across five agents ends up being a text file for all of them,
+which is the exact thing this exists to replace.
 
 ```bash
 stet claude          # wire it in     ·  stet claude remove  ·  stet claude status
@@ -329,6 +347,35 @@ have caught a specific one of them. It is never installed unless you ask: a
 canon is a claim about what your repository believes, and filling it with claims
 you never made is the thing this tool refuses to do everywhere else. Remove any
 of them with `stet rule remove <n>`.
+
+## Does it actually work? Check for yourself
+
+stet was built under its own gate, and every failure found along the way is
+written down as it happened — including the ones that were embarrassing, the two
+that were reported and turned out not to reproduce, and the one that was fixed
+and then reintroduced by the person who fixed it.
+
+**[`showcase/JOURNAL.md`](showcase/JOURNAL.md) — 45 bugs found by using the
+tool, not by reading the code.**
+
+The number that matters is not 45. It is this:
+
+| | |
+|---|---|
+| Bugs found by running it | **45** |
+| Bugs that announced themselves — a crash, a hang, a non-zero exit | **8** |
+| Bugs that **reported success while broken** | **37** |
+
+That is the shape of the problem an agent has, and it is not solved by being
+careful. A capture with the right dimensions and the wrong picture. Two live
+previews that rendered blank. A hook wired to an event Claude Code does not
+emit, which never fired once and passed a green status check for the life of the
+project. A published package that identified itself as the previous version.
+Every one of those was invisible from the code and obvious the moment somebody
+looked at the artifact.
+
+Eight of those lessons are installable as rules — see [the method
+canon](#the-method-canon).
 
 ## Why it is cheaper, not slower
 
