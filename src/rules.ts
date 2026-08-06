@@ -308,11 +308,33 @@ function globOverlaps(a: string, b: string): boolean {
   return ha.startsWith(hb) || hb.startsWith(ha);
 }
 
+/**
+ * The activation surface. Everything else in this tool is downstream of whether
+ * an agent ever asks, and the old version of this text did not get one: it said
+ * to stop at "a preference fork" — no operational definition — and pointed at
+ * `stet schema`, a discovery step, for a format that then had to be authored as
+ * fifteen lines of JSON. An agent mid-task will not do that. It will pick one
+ * and keep going, because it is trained to finish.
+ *
+ * So the trigger is named concretely, and the command is written out in full
+ * here rather than described, because agents follow examples they can copy far
+ * more reliably than instructions they have to look up. It costs about a
+ * hundred tokens, once, and it is the difference between a gate and an ornament.
+ */
 function preamble(): string {
   return [
-    'STET RULES — verdicts this repo\'s owner already gave. They are binding.',
-    'Follow them without asking again. Hitting a preference fork with no rule',
-    'here is the one time to stop and ask — run `stet schema` to see how.',
+    'STET RULES — verdicts this repo\'s owner already gave. Binding; follow them',
+    'without asking again.',
+    '',
+    'At a fork this canon does not cover, where both options work and taste decides',
+    '(design, copy, layout, naming, tone), do not pick for the human. Ask:',
+    '',
+    '  stet ask "Which empty state?" "Nothing here yet" "Start a project" --wait',
+    '  stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait',
+    '',
+    '--wait blocks until a human rules, then prints the verdict; blocking beats a',
+    'guess that costs a rebuild. To keep working meanwhile, drop --wait and add',
+    "--globs 'src/hero/**' — writes there are denied until the verdict.",
     // The wiring is per-developer, so nothing checked in can tell a teammate
     // it is missing. This line can, and it costs about twenty tokens once.
     'If `stet claude status` says unwired, tell the human to run `stet claude`.',

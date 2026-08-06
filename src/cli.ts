@@ -33,21 +33,28 @@ interface Args {
   cmd: string;
   rest: string[];
   flags: Record<string, string | boolean>;
+  /** Every occurrence of each flag, in order — `--url a --url b` is two options. */
+  all: Record<string, string[]>;
 }
 
 function parse(argv: string[]): Args {
   const flags: Record<string, string | boolean> = {};
+  const all: Record<string, string[]> = {};
   const rest: string[] = [];
+  const set = (k: string, v: string | boolean): void => {
+    flags[k] = v;
+    if (typeof v === 'string') (all[k] ??= []).push(v);
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
       const eq = a.indexOf('=');
-      if (eq !== -1) flags[a.slice(2, eq)] = a.slice(eq + 1);
-      else if (argv[i + 1] && !argv[i + 1].startsWith('-')) flags[a.slice(2)] = argv[++i];
-      else flags[a.slice(2)] = true;
+      if (eq !== -1) set(a.slice(2, eq), a.slice(eq + 1));
+      else if (argv[i + 1] && !argv[i + 1].startsWith('-')) set(a.slice(2), argv[++i]);
+      else set(a.slice(2), true);
     } else rest.push(a);
   }
-  return { cmd: rest[0] ?? '', rest: rest.slice(1), flags };
+  return { cmd: rest[0] ?? '', rest: rest.slice(1), flags, all };
 }
 
 const args = parse(process.argv.slice(2));
@@ -71,7 +78,7 @@ if (args.cmd === '') {
 // a misspelled flag is a person who knows what they want.
 const FLAGS: Record<string, string[]> = {
   '': ['port', 'no-open', 'budget'],
-  ask: ['shuffle', 'help'],
+  ask: ['shuffle', 'help', 'url', 'image', 'code', 'why', 'id', 'globs', 'tag', 'how', 'notes', 'wait', 'timeout'],
   await: ['timeout'],
   rules: ['tag', 'budget'],
   sync: ['remove', 'budget'],
@@ -108,6 +115,20 @@ function checkFlags(): void {
       `       it takes: ${known.length ? known.map((f) => `--${f}`).join(', ') : 'no flags'}`,
   );
 }
+
+/**
+ * Refuse a value that cannot be what it has to be, before anything is written.
+ * `stet --port notaport` used to initialise the project, sync every agent
+ * surface, and only then complain — so the failure arrived after the side
+ * effects it should have prevented.
+ */
+function checkValues(): void {
+  for (const f of ['port', 'budget', 'timeout', 'threshold', 'settle']) {
+    const v = args.flags[f];
+    if (v === undefined || v === true) continue;
+    if (!Number.isFinite(Number(v))) throw new Error(`--${f} takes a number, not ${JSON.stringify(v)}`);
+  }
+}
 const root = findRoot();
 const budget = Number(args.flags.budget ?? DEFAULT_BUDGET) || DEFAULT_BUDGET;
 
@@ -127,6 +148,7 @@ try {
 
 async function main(): Promise<void> {
   checkFlags();
+  checkValues();
   switch (args.cmd) {
     case '':
       return run();
@@ -448,7 +470,7 @@ async function run(): Promise<void> {
   }
 
   const server = await serve(root, {
-    port: Number(args.flags.port) || undefined,
+    port: portOf(args.flags.port),
     budget,
     onPending: (ids) => {
       const n = ids.length;
@@ -473,7 +495,149 @@ async function run(): Promise<void> {
 
 // ── ask: how agents queue a decision ──────────────────────────────────────
 
+/**
+ * The one-line form.
+ *
+ * An agent mid-task will not stop, run `stet schema`, author fifteen lines of
+ * JSON and block — it will pick one and keep going, because it is trained to
+ * finish. Every instruction telling it otherwise is competing with that. So the
+ * ask has to cost less than the guess:
+ *
+ *   stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b \
+ *            --globs 'src/hero/**' --wait
+ *
+ * which queues the decision, denies writes into the paths it claims, and blocks
+ * until a human has ruled — in one command, with nothing to author.
+ */
+async function askShorthand(): Promise<void> {
+  const question = args.rest[0];
+  const texts = args.rest.slice(1);
+  const urls = args.all.url ?? [];
+  const images = args.all.image ?? [];
+  const codes = args.all.code ?? [];
+
+  const kinds = [
+    ['text', texts] as const,
+    ['url', urls] as const,
+    ['image', images] as const,
+    ['code', codes] as const,
+  ].filter(([, v]) => v.length);
+
+  if (!kinds.length) {
+    throw new Error(
+      'give the options to choose between:\n' +
+        '       stet ask "Which label?" "Buy now" "Get started"\n' +
+        '       stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b\n' +
+        '       stet ask "Which spacing?" --image a.png --image b.png\n' +
+        '       stet ask "Which shape?" --code a.ts --code b.ts',
+    );
+  }
+  if (kinds.length > 1) {
+    // Comparing a screenshot against a URL is not a comparison. The whole
+    // premise is that only the thing being decided differs.
+    throw new Error(`compare like with like — got ${kinds.map(([k, v]) => `${v.length} ${k}`).join(' and ')}`);
+  }
+
+  const [kind, values] = kinds[0];
+  const label = (i: number): string => String.fromCharCode(65 + i);
+  const why = args.all.why ?? [];
+
+  const variants = values.map((value, i) => {
+    let block: Record<string, unknown>;
+    if (kind === 'text') block = { kind: 'text', text: value };
+    else if (kind === 'url') block = { kind: 'url', href: withScheme(value) };
+    else if (kind === 'image') block = { kind: 'image', src: value };
+    else block = { kind: 'code', lang: path.extname(value).slice(1), text: readOption(value), title: path.basename(value) };
+    return { label: label(i), blocks: [block] };
+  });
+
+  // What the human is told afterwards. Derived from the option itself, because
+  // that is the honest answer to "which one was that" — and overridable with
+  // --why when the agent knows something the artifact does not show.
+  const map: Record<string, string> = {};
+  values.forEach((value, i) => {
+    map[label(i)] = why[i] ?? (kind === 'text' && value.length > 90 ? value.slice(0, 87) + '…' : value);
+  });
+
+  const list = (v: unknown): string[] =>
+    typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : [];
+
+  const item = {
+    id: uniqueId(String(args.flags.id ?? '') || slug(question)),
+    question,
+    map,
+    variants,
+    ...(args.flags.how ? { how: String(args.flags.how) } : {}),
+    ...(args.flags.notes ? { notes: String(args.flags.notes) } : {}),
+    ...(list(args.flags.globs).length ? { globs: list(args.flags.globs) } : {}),
+    ...(list(args.flags.tag).length ? { tags: list(args.flags.tag) } : {}),
+  } as unknown as Item;
+
+  assertItem(item);
+  warnUnmatchedGlobs(item);
+  addItem(root, item, { shuffle: args.flags.shuffle !== 'false' });
+  out(item.id);
+  process.stderr.write(
+    `stet: queued ${item.id} — ${values.length} option${values.length === 1 ? '' : 's'}` +
+      `${item.globs?.length ? `, writes into ${item.globs.join(', ')} are denied until ruled` : ''}\n`,
+  );
+  // Queue and block in one command, so an agent that asks does not also have to
+  // remember to wait — forgetting to wait is how it ends up guessing anyway.
+  if (args.flags.wait) await waitFor(item.id, Number(args.flags.timeout) || 0);
+}
+
+/**
+ * A bare host:port is what people type; without a scheme it resolves as a file
+ * beside item.json instead. `localhost:5173` is the awkward one — it is a valid
+ * URL whose scheme is `localhost` and whose path is `5173`, which is the same
+ * ambiguity a browser address bar has. A colon followed by a digit is a port.
+ */
+function withScheme(v: string): string {
+  // host:port first — a numeric host, a name, or a bracketed IPv6 address.
+  if (/^(\[[^\]]+\]|[a-z0-9][a-z0-9.-]*):\d+(?:[/?#]|$)/i.test(v)) return `http://${v}`;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v) || v.startsWith('/') || v.startsWith('.')) return v;
+  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?:[/?#]|$)/i.test(v) ? `http://${v}` : v;
+}
+
+/**
+ * `Number(v) || undefined` reads 0 as "unset". But 0 is a real request — let the
+ * operating system pick a free port — and swallowing it sent every caller back
+ * to the default, where they raced each other for 7838.
+ */
+function portOf(v: string | boolean | undefined): number | undefined {
+  if (v === undefined || v === true) return undefined;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 65535) throw new Error(`--port ${String(v)} is not a port number`);
+  return n;
+}
+
+function readOption(file: string): string {
+  try {
+    return fs.readFileSync(path.resolve(file), 'utf8');
+  } catch {
+    throw new Error(`cannot read ${file} — --code takes a path to a file`);
+  }
+}
+
+function slug(s: string): string {
+  const base = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+  return base || 'decision';
+}
+
+/** Never collide with a decision already queued or already made. */
+function uniqueId(base: string): string {
+  const p = paths(root);
+  const taken = (id: string): boolean =>
+    fs.existsSync(path.join(p.pending, id)) || fs.existsSync(path.join(p.decided, id));
+  if (!taken(base)) return base;
+  for (let n = 2; n < 100; n++) if (!taken(`${base}-${n}`)) return `${base}-${n}`;
+  throw new Error(`too many decisions named "${base}" — pass --id`);
+}
+
 async function ask(): Promise<void> {
+  // A question on the command line means the one-line form. Nothing to author,
+  // nothing to pipe.
+  if (args.rest.length) return askShorthand();
   // Nothing is piped in. Waiting forever is the worst possible answer to the
   // first thing anyone types when working out how this is called.
   if (process.stdin.isTTY || args.flags.help) return schema();
@@ -525,9 +689,21 @@ function warnUnmatchedGlobs(item: Item): void {
  */
 function schema(): void {
   out(`
-  ${warm('stet ask')} ${dim('< item.json')}   ${dim('— queue a decision and let the human rule on it')}
+  ${warm('stet ask')}   ${dim('— queue a decision and let the human rule on it')}
 
-  ${cool('A worked example.')} Copy it, replace the content, pipe it in.
+  ${cool('Most decisions need no JSON at all.')} One line, nothing to author:
+
+  ${cool('stet ask')} "Which empty state?" "Nothing here yet" "Start a project" ${warm('--wait')}
+  ${cool('stet ask')} "Which hero?" ${warm('--url')} localhost:5173/a ${warm('--url')} localhost:5173/b ${warm('--wait')}
+  ${cool('stet ask')} "Which spacing?" ${warm('--image')} a.png ${warm('--image')} b.png
+  ${cool('stet ask')} "Which shape?" ${warm('--code')} a.ts ${warm('--code')} b.ts
+
+  ${warm('--wait')} blocks until a human rules, then prints the verdict.
+  ${warm('--globs')} ${dim("'src/hero/**'")} denies writes into those paths until it is ruled.
+  ${warm('--why')} ${dim('"…"')} names what an option really is, if the artifact does not show it.
+
+  ${cool('The long form')} ${dim('— stet ask < item.json')} ${dim('— for views, mixed blocks, notes.')}
+  Copy it, replace the content, pipe it in.
 
 {
   "id": "hero-type",                        ${dim('// [a-z0-9._-], becomes the directory name')}
@@ -579,8 +755,11 @@ function schema(): void {
 async function awaitDecision(): Promise<void> {
   const id = args.rest[0];
   if (!validId(id)) throw new Error('usage: stet await <id> [--timeout 3600]');
-  const timeout = Number(args.flags.timeout) || 0;
+  return waitFor(id, Number(args.flags.timeout) || 0);
+}
 
+/** Block until `id` has a verdict, then print it. Shared with `stet ask --wait`. */
+async function waitFor(id: string, timeout: number): Promise<void> {
   const decided = () => {
     const e = findEntry(root, id);
     return e && e.ok && e.state === 'decided' ? e.item : null;
@@ -686,7 +865,10 @@ function help(): void {
   Your agents ask once. Your answer stands.
 
   ${cool('stet')}                        init, wire agent surfaces, serve, watch, notify
-  ${cool('stet ask')} < item.json        queue a decision — this is how agents call it
+  ${cool('stet ask')} "<question>" <a> <b>  queue a decision — this is how agents call it
+  ${dim('        [--url u --url u] [--image f] [--code f]')}  ${dim('live pages, shots, files')}
+  ${dim('        [--globs src/x/**] [--wait]')}          ${dim('claim paths · block for the verdict')}
+  ${cool('stet ask')} < item.json        the long form, for anything the flags cannot say
   ${cool('stet init')}                   start a project here, even inside another one
   ${cool('stet capture')} A=<url> B=<url>  matched screenshots of every variant at every view
   ${cool('stet schema')}                 the item format, as a worked example

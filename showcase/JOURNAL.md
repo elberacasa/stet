@@ -699,6 +699,126 @@ It is `test/stress-newuser.mjs`, and it runs before every publish.
 
 ---
 
+## The question nobody had asked: does an agent ever call this?
+
+Everything so far assumed the loop starts. Sixteen commits of gate, canon,
+capture, live preview, concurrency and packaging — all downstream of a single
+event that had never been examined: **an agent deciding to ask.**
+
+So I read the only thing that causes it. The whole activation surface, in a
+fresh project, was 373 bytes:
+
+```
+STET RULES — verdicts this repo's owner already gave. They are binding.
+Follow them without asking again. Hitting a preference fork with no rule
+here is the one time to stop and ask — run `stet schema` to see how.
+```
+
+Read that as the agent. You are mid-task. You are told to stop at "a preference
+fork" — no definition you can act on — and then to *run a discovery command*,
+read a schema, author fifteen lines of JSON with a `map` and `variants` and
+`blocks`, and block.
+
+You will not do that. You will pick one and keep going, because you are trained
+to finish.
+
+This project's own README says so, about the deny: *"An instruction can be
+ignored. A denied tool call cannot. This is the only reliable way to stop an
+agent that is trained to finish."* The ask was the one path in the entire tool
+still resting on an instruction — the weakest mechanism — described in the
+vaguest available terms, and gated behind a documentation lookup.
+
+The fix is not a better instruction. It is making the ask cost less than the
+guess.
+
+### One line, nothing to author
+
+```bash
+stet ask "Which empty state?" "Nothing here yet" "Start a project" --wait
+stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait
+stet ask "Which spacing?" --image before.png --image after.png
+stet ask "Which shape?" --code a.ts --code b.ts
+```
+
+No `id` — it is slugged from the question, and collisions get a suffix. No
+`map` — it is derived from the option itself, which is the honest answer to
+"which one was that", overridable with `--why`. No JSON.
+
+`--wait` queues and blocks in the same command, because an agent that asks and
+then forgets to wait has guessed anyway. `--globs 'src/hero/**'` claims the
+paths so writes there are denied meanwhile. The whole loop, one line:
+
+```bash
+stet ask "Which pricing page?" --url 127.0.0.1:5173/?v=a --url 127.0.0.1:5173/?v=b \
+         --globs 'src/pricing/**' --wait
+```
+
+Two running apps, side by side, blind, from one command — and the agent held at
+the gate until a human has ruled.
+
+The long form still exists and still takes everything the flags cannot say:
+matched views, mixed block kinds, notes. It is no longer the price of entry.
+
+### Finding 23 — the page printed the answer under both panels
+
+The `url` block rendered its address beneath every frame. With the shorthand
+making URLs the easy path, that became the likeliest way to run a blind test —
+and `/hero-serif` sitting beside `/hero-sans` tells the human exactly which is
+which while they are still supposed to be judging the frame.
+
+The address is withheld until the verdict now. The link still opens; it just
+does not announce where it goes.
+
+### Finding 24 — `localhost:5173` is not a host
+
+`--url localhost:5173/a` produced a variant pointing at `localhost:5173/a`,
+unmodified, while `--url 127.0.0.1:5173/b` correctly became
+`http://127.0.0.1:5173/b`.
+
+`localhost:5173/a` **is** a valid URL: scheme `localhost`, path `5173/a`. My
+scheme check matched it and returned early. This is the same ambiguity a browser
+address bar has, and the resolution is the same one browsers use: a colon
+followed by a digit is a port, not a scheme.
+
+Found by a test I wrote expecting it to pass.
+
+### Finding 25 — `--port 0` was silently the default port
+
+`Number(v) || undefined` reads `0` as unset. But `--port 0` is a real request —
+let the operating system pick a free port — and swallowing it sent every caller
+back to 7838, where they raced each other.
+
+I only found this because I reached for `--port 0` to fix a flaky harness, and
+the harness stayed flaky.
+
+While fixing it: `stet --port notaport` used to initialise the project, write
+`AGENTS.md`, sync every agent surface, *and then* report the bad flag. The
+failure arrived after the side effects it should have prevented. Values are
+checked before anything runs now.
+
+### Finding 26 — my own test harness had the bug stet had
+
+`stet ask --wait` exited correctly. The harness hung forever waiting for it.
+
+```js
+await fetch(`${base}/api/decide`, {…});                  // the child exits here
+const code = await new Promise((r) => asking.on('close', r));  // listener attached after
+```
+
+`close` fires once. A listener attached after it fired waits for an event that
+has already happened.
+
+That is exactly the check-then-watch race I closed inside `stet await` two
+releases ago — and I reproduced it, in the suite that guards the release, while
+testing the fix for something else. It was intermittent: in section 6 the child
+took 744ms to notice the verdict, longer than the fetch, so the listener won the
+race. In section 7 it did not.
+
+A flaky hang in a release gate is worse than a failing one. Both listeners are
+attached at spawn now.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -733,11 +853,22 @@ Not one of these was visible from reading the code.
 | 26 | wiring a fresh project | the wiring detected that the gate it had just installed does nothing, and wrote it anyway |
 | 27 | malformed agent input | missing `map` or `variants` crashed with an internal TypeError; a missing question or an unknown block kind queued successfully and rendered a decision nobody could act on |
 
+| 28 | the shorthand | the page printed each variant's URL under its panel — with `--url` the easy path, a descriptive address hands the human the answer |
+| 29 | a test I expected to pass | `localhost:5173` parses as scheme `localhost`, path `5173` — the URL was left unmodified while `127.0.0.1:5173` was fixed |
+| 30 | fixing a flaky harness | `--port 0` — "let the OS choose" — was read as unset by `Number(v) \|\| undefined` and became the default port, where callers raced |
+| 31 | the same flaky harness | a `close` listener attached after the child had already exited, waiting forever for an event that had fired — the race stet's own `await` had |
+
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Six of the twenty-seven
-announced themselves — 5, 6, 7, 14, 24 and 26 — and they are the boring kind: a
-hang, a non-zero exit, a warning printed before proceeding anyway. The other
-twenty-one reported success while broken.
+invisible from the code and obvious from the use.** Seven of the thirty-one
+announced themselves — 5, 6, 7, 14, 24, 26 and 31 — and they are the boring
+kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
+other twenty-four reported success while broken.
+
+Number 31 is worth its own line, because it is the only one I had already
+fixed. The check-then-watch race closed inside `stet await` came back in the
+harness that guards the release, while I was testing something else. Knowing a
+bug intimately does not stop you writing it again somewhere it is not being
+looked for.
 
 Findings 23 to 27 all came from one decision: install the published package
 instead of testing the source tree. Ninety-four passing tests and three stress

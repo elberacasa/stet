@@ -44,15 +44,37 @@ the more of your software an agent writes.
 Ask once. Record the answer. Make it binding on every agent that touches the
 repo from then on.
 
+The agent runs one line — this is the whole call, there is nothing to author:
+
+```bash
+stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait
 ```
-agent hits a fork  →  stet ask < item.json   (writes a small file, blocks, burns nothing)
+
+```
+agent hits a fork  →  stet ask "…" --wait      (blocks, burns nothing, no tokens)
                    →  you get a notification
-                   →  you open a page and judge the real thing
+                   →  you open a page and judge the real thing, running, side by side
                    →  one line becomes a rule
                    →  the rule is injected into AGENTS.md, CLAUDE.md, .cursorrules…
-                   →  the agent unblocks and continues
+                   →  the agent unblocks with the verdict and continues
                    →  every future agent obeys it without asking
 ```
+
+That matters more than it looks. An agent is trained to finish, so asking has
+to cost less than guessing or it will never happen — and "stop, read a schema,
+author fifteen lines of JSON, block" costs more. Four shapes cover almost
+everything:
+
+```bash
+stet ask "Which empty state?" "Nothing here yet" "Start your first project"
+stet ask "Which hero?"    --url localhost:5173/a --url localhost:5173/b
+stet ask "Which spacing?" --image before.png --image after.png
+stet ask "Which shape?"   --code a.ts --code b.ts
+```
+
+Add `--wait` to block until you rule. Add `--globs 'src/hero/**'` and writes
+into those paths are **denied** until you do — so an agent with other work can
+carry on and still cannot quietly ship the guess.
 
 ## The whole thing, not a snippet
 

@@ -455,3 +455,79 @@ describe('flags a command does not read', () => {
     expect(run(['rules', '--tag', 'design']).status).toBe(0);
   });
 });
+
+// ── the one-line ask ───────────────────────────────────────────────────────
+// The whole tool is downstream of whether an agent ever asks, and asking used
+// to cost a discovery command plus fifteen lines of authored JSON — more than
+// guessing, against a model trained to finish. These are the shapes that make
+// asking cheaper than the guess.
+describe('the one-line ask', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+  const queued = (id: string) =>
+    JSON.parse(fs.readFileSync(path.join(root, '.stet/pending', id, 'item.json'), 'utf8')) as Item;
+
+  it('queues two text options with no JSON', () => {
+    const r = run(['ask', 'Which button label ships?', 'Buy now', 'Get started']);
+    expect(r.status, r.stderr).toBe(0);
+    const item = queued('which-button-label-ships');
+    expect(item.variants).toHaveLength(2);
+    expect(item.variants.map((v) => (v.blocks[0] as { text: string }).text).sort())
+      .toEqual(['Buy now', 'Get started']);
+  });
+
+  it('derives the id from the question and never collides', () => {
+    run(['ask', 'Same question?', 'a', 'b']);
+    run(['ask', 'Same question?', 'c', 'd']);
+    expect(fs.existsSync(path.join(root, '.stet/pending/same-question'))).toBe(true);
+    expect(fs.existsSync(path.join(root, '.stet/pending/same-question-2'))).toBe(true);
+  });
+
+  it('gives a bare host:port a scheme, because otherwise it is a relative path', () => {
+    run(['ask', 'Which hero?', '--url', 'localhost:5173/a', '--url', '127.0.0.1:5173/b']);
+    const hrefs = queued('which-hero').variants.map((v) => (v.blocks[0] as { href: string }).href).sort();
+    expect(hrefs).toEqual(['http://127.0.0.1:5173/b', 'http://localhost:5173/a']);
+  });
+
+  it('claims paths, so the gate denies writes there', () => {
+    run(['ask', 'Which layout?', 'grid', 'stack', '--globs', 'src/hero/**']);
+    expect(queued('which-layout').globs).toEqual(['src/hero/**']);
+  });
+
+  it('refuses to compare unlike things', () => {
+    const r = run(['ask', 'Which?', 'some text', '--url', 'localhost:3000']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/compare like with like/);
+  });
+
+  it('names the options it can take when given none', () => {
+    const r = run(['ask', 'Which one?']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/--url/);
+    expect(r.stderr).toMatch(/--image/);
+  });
+
+  it('shuffles, so the order the agent listed them in is not the order shown', () => {
+    // Deterministically: over many items, the first option must not always be A.
+    let firstIsA = 0;
+    const n = 40;
+    for (let i = 0; i < n; i++) {
+      run(['ask', `Shuffle probe ${i}?`, 'first-option', 'second-option']);
+      const item = queued(`shuffle-probe-${i}`);
+      if (item.map?.A === 'first-option') firstIsA++;
+    }
+    expect(firstIsA).toBeGreaterThan(4);
+    expect(firstIsA).toBeLessThan(n - 4);
+  });
+});
+
+// ── the blind guarantee, in the page itself ────────────────────────────────
+describe('what the page shows before a verdict', () => {
+  it('withholds a url block address until the reveal', () => {
+    // A URL is rarely neutral: /hero-serif beside /hero-sans hands the human
+    // the answer while they are still supposed to be judging the frame. The
+    // page printed it under every panel.
+    expect(PAGE).toContain('opens in a new tab');
+    expect(PAGE).toMatch(/revealed\?esc\(b\.href/);
+  });
+});

@@ -441,7 +441,7 @@ function refused(kind,value){
     '<div class="block"><pre class="code">'+esc(String(value))+"</pre></div>";
 }
 
-function blockHtml(b,id){
+function blockHtml(b,id,revealed){
   var t=b&&b.title?'<div class="btitle"><span>'+esc(b.title)+"</span></div>":"";
   if(!b||typeof b!=="object") return '<div class="unknown">a block that is not an object</div>';
   switch(b.kind){
@@ -471,13 +471,19 @@ function blockHtml(b,id){
       // be self-contained; an absolute one points at your dev server.
       var href=asset(id,String(b.href||""),false);
       if(href===null) return refused("url",b.href);
+      // The address is withheld until the verdict. A URL is rarely neutral --
+      // /hero-serif beside /hero-sans hands the human the answer while they are
+      // still supposed to be judging the frame -- and printing it under every
+      // panel was doing exactly that. The link still opens; it just does not
+      // announce where it goes.
       return '<div class="block">'+t+
         // Not lazy: a live variant that has not loaded yet is a blank white box,
         // and a blank box is something a human will judge.
         '<div class="liveframe"><iframe src="'+esc(href)+'" '+
           'sandbox="'+esc(sandboxFor(href))+'"></iframe></div>'+
         '<a class="urlblock" target="_blank" rel="noreferrer" href="'+esc(href)+'">'+
-        esc(b.title||"open full size")+"<span>"+esc(b.href||"")+" ↗</span></a></div>";
+        esc(b.title||"open full size")+"<span>"+
+        (revealed?esc(b.href||"")+" ↗":"opens in a new tab ↗")+"</span></a></div>";
     default:
       return '<div class="unknown">unsupported block kind "'+esc(b.kind)+'" — shown raw</div>'+
         '<div class="block"><pre class="code">'+esc(JSON.stringify(b,null,2))+"</pre></div>";
@@ -564,7 +570,7 @@ function renderDeck(entry){
       shown.map(function(v){
         var blocks=(v.blocks||[]).filter(function(b){return ((b&&b.view)||"")===view});
         return '<div class="'+colClasses(v)+'" data-pick="'+esc(v.label)+'">'+
-          (blocks.length?blocks.map(function(b){return blockHtml(b,entry.id)}).join(""):'<div class="missing">no '+esc(view)+" for "+esc(v.label)+"</div>")+
+          (blocks.length?blocks.map(function(b){return blockHtml(b,entry.id,!!reveal)}).join(""):'<div class="missing">no '+esc(view)+" for "+esc(v.label)+"</div>")+
         "</div>";
       }).join("")+"</section>";
   }).join("");

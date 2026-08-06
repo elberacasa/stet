@@ -37,6 +37,26 @@ fs.mkdirSync(path.join(proj, 'src/components'), { recursive: true });
 fs.writeFileSync(path.join(proj, 'src/components/Button.tsx'), 'export const Button = () => <button>Buy</button>;\n');
 spawnSync('git', ['init', '-q', '.'], { cwd: proj });
 
+
+/**
+ * Start the server and learn where it landed, rather than assuming a port.
+ * A fixed port makes this suite fail for a reason that has nothing to do with
+ * stet: a server left behind by an earlier interrupted run still holds it, and
+ * the fetches then talk to a stale process pointed at a deleted directory.
+ */
+function serveAndWait(cwd) {
+  return new Promise((done, fail) => {
+    const p = spawn('node', [BIN, '--port', '0', '--no-open'], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let seen = '';
+    const t = setTimeout(() => fail(new Error(`server never printed a url: ${seen.slice(0, 200)}`)), 15_000);
+    p.stdout.on('data', (d) => {
+      seen += d;
+      const m = /http:\/\/127\.0\.0\.1:(\d+)\//.exec(seen.replace(/\x1b\[[0-9;]*m/g, ''));
+      if (m) { clearTimeout(t); done({ proc: p, base: `http://127.0.0.1:${m[1]}` }); }
+    });
+  });
+}
+
 const stet = (args, opts = {}) =>
   spawnSync('node', [BIN, ...args], { cwd: proj, encoding: 'utf8', timeout: 15_000, ...opts });
 
@@ -146,30 +166,75 @@ console.log('\n6. an agent asks, blocks, and is released');
   const waiter = spawn('node', [BIN, 'await', 'cta', '--timeout', '20'], { cwd: proj, stdio: ['ignore', 'pipe', 'pipe'] });
   let woke = '';
   waiter.stdout.on('data', (d) => (woke += d));
+  // Attached now, not after the verdict is posted. 'close' fires once; a
+  // listener added later misses it and waits forever for an event that has
+  // already happened — the same check-then-watch ordering `stet await` had.
+  const waiterExit = new Promise((r) => waiter.on('close', r));
   const t0 = Date.now();
   await new Promise((r) => setTimeout(r, 600));
 
-  const srv = spawn('node', [BIN, '--port', '7851', '--no-open'], { cwd: proj, stdio: 'ignore' });
-  await new Promise((r) => setTimeout(r, 1200));
-  const state = await (await fetch('http://127.0.0.1:7851/api/state')).json();
+  const { proc: srv, base } = await serveAndWait(proj);
+  const state = await (await fetch(`${base}/api/state`)).json();
   const entry = state.pending.find((e) => e.id === 'cta');
   ok('the page can see it', !!entry);
   ok('and the page is not told which is which', entry && !('map' in entry.item),
     entry ? Object.keys(entry.item).join(',') : '');
 
-  const dec = await fetch('http://127.0.0.1:7851/api/decide', {
+  const dec = await fetch(`${base}/api/decide`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id: 'cta', verdict: 'A', because: 'it says what the button does' }),
   });
   ok('a verdict commits', dec.status === 200, `HTTP ${dec.status}`);
 
-  const code = await new Promise((r) => waiter.on('close', r));
+  const code = await waiterExit;
   ok('the blocked agent wakes', code === 0, `exit ${code} after ${Date.now() - t0}ms`);
   ok('and is told the verdict', /verdict/i.test(woke), woke.trim().split('\n')[0]?.slice(0, 60));
   ok('the reveal names the real variant', /Buy now|Get started/.test(woke), woke.match(/Buy now|Get started/)?.[0] ?? 'not revealed');
 
   const canon = fs.readFileSync(path.join(proj, '.stet/RULES.md'), 'utf8');
   ok('a rule was earned', /says what the button does/.test(canon), `${(canon.match(/^## /gm) ?? []).length} rules in the canon`);
+  srv.kill('SIGKILL');
+}
+
+// ── the one-line form, which is the one an agent will actually reach for ──
+console.log('\n7. the whole loop in one command');
+{
+  const { proc: srv, base } = await serveAndWait(proj);
+
+  const asking = spawn('node', [BIN, 'ask', 'Which empty state?', 'Nothing here yet', 'Start a project',
+    '--globs', 'src/empty/**', '--wait', '--timeout', '25'], { cwd: proj, stdio: ['ignore', 'pipe', 'pipe'] });
+  let sout = '';
+  let serr = '';
+  asking.stdout.on('data', (d) => (sout += d));
+  asking.stderr.on('data', (d) => (serr += d));
+  const askingExit = new Promise((r) => asking.on('close', r));
+  await new Promise((r) => setTimeout(r, 1500));
+
+  ok('one command queued it with no JSON authored', /queued which-empty-state/.test(serr), serr.trim().split('\n').pop());
+
+  // While the agent waits, the paths it claimed are shut.
+  const denied = spawnSync('node', [BIN, 'hook', 'pre-tool-use'], {
+    cwd: proj, encoding: 'utf8',
+    input: JSON.stringify({
+      session_id: 's9', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write',
+      tool_input: { file_path: path.join(proj, 'src/empty/Empty.tsx'), content: 'x' },
+    }),
+  });
+  const spec = denied.stdout ? JSON.parse(denied.stdout).hookSpecificOutput : {};
+  ok('writes into the paths it claimed are denied meanwhile', spec?.permissionDecision === 'deny',
+    spec?.permissionDecision ?? 'allowed');
+
+  const state = await (await fetch(`${base}/api/state`)).json();
+  const entry = state.pending.find((e) => e.id === 'which-empty-state');
+  ok('and the page still is not told which is which', entry && !('map' in entry.item));
+
+  await fetch(`${base}/api/decide`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 'which-empty-state', verdict: 'A', because: 'it tells them what to do next' }),
+  });
+  const code = await askingExit;
+  ok('the same command returns with the verdict', code === 0 && /verdict: A/.test(sout), sout.trim().split('\n')[0]);
+  ok('and reveals what A actually was', /revealed:/.test(sout), (sout.match(/revealed: .*/) ?? [''])[0].slice(0, 60));
   srv.kill('SIGKILL');
 }
 
