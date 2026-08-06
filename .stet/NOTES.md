@@ -40,3 +40,7 @@ somebody already stepped on. Anything may add one; nothing here is binding.
 ## 9 — a test that writes into the tree it runs from cannot be trusted about that tree — spawned hooks need an explicit cwd, or a payload without one falls back to this checkout
 
 *Learned 2026-08-06. Globs: test/**.*
+
+## 10 — the fired-markers in .stet/sessions accumulate from your own session under the gate — a test must assert the suite did not CHANGE them, not that none exist
+
+*Learned 2026-08-06. Globs: test/**.*

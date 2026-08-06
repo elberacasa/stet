@@ -12,6 +12,7 @@ import { notify, open } from './notify.js';
 // call, so it is imported lazily and only by the command that serves.
 import { addItem, findEntry, findRoot, init, lastDecided, listEntries, paths, undecide, validId } from './store.js';
 import { appendNote, readNotes, removeNote, thin } from './notes.js';
+import { commaList } from './text.js';
 import { assertItem } from './validate.js';
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
@@ -252,36 +253,24 @@ async function hook(): Promise<void> {
   process.exit(0);
 }
 
-async function claude(): Promise<void> {
-  const { CLAUDE_EVENTS, install, installCommands, installed, uninstall, uninstallCommands, WIRING } = await import('./claude.js');
-  // Local by default. A checked-in hook pointing at a binary a teammate has
-  // not installed fails on every tool call and gates nothing — the repo would
-  // claim a protection it is not providing, which is worse than no protection.
-  // `--project` opts into the shared form once the team has stet.
-  const scope = args.flags.project ? 'project' : 'local';
-  const sub = args.rest[0] ?? 'install';
+/** `stet claude remove` — take the wiring and the slash commands back out. */
+async function claudeRemove(scope: 'project' | 'local'): Promise<void> {
+  const { uninstall, uninstallCommands } = await import('./claude.js');
+  const r = uninstall(root, scope);
+  const gone = uninstallCommands(root);
+  out(r.removed.length ? `  ${cool('removed')} ${r.removed.length} hook(s) from ${path.relative(root, r.file)}` : dim('  nothing wired'));
+  if (gone.length) out(`  ${cool('removed')} ${gone.length} slash command(s)`);
+}
 
-  if (sub === 'remove' || args.flags.remove) {
-    const r = uninstall(root, scope);
-    const gone = uninstallCommands(root);
-    out(r.removed.length ? `  ${cool('removed')} ${r.removed.length} hook(s) from ${path.relative(root, r.file)}` : dim('  nothing wired'));
-    if (gone.length) out(`  ${cool('removed')} ${gone.length} slash command(s)`);
-    return;
-  }
-  // Both halves, not one. The old check asked our own binary whether it
-  // implements each hook argument — which it always does, since we wrote both
-  // sides — and never asked whether Claude Code emits the event we are
-  // listening for. `PostCompact` passed that check for the life of the project
-  // and was never emitted by anything.
-  const unreal = WIRING.filter((w) => !(CLAUDE_EVENTS as readonly string[]).includes(w.event));
-  if (unreal.length) {
-    throw new Error(
-      `this build wires ${unreal.map((w) => w.event).join(', ')}, which Claude Code does not emit.\n` +
-        `       those hooks would never fire. real events: ${CLAUDE_EVENTS.join(', ')}`,
-    );
-  }
+/**
+ * `stet claude status` — three questions, in increasing order of how much they
+ * are worth. Is a hook written down; does the binary it names implement the
+ * event; and has Claude Code ever actually called it. Only the third is
+ * evidence rather than a declaration.
+ */
+async function claudeStatus(scope: 'project' | 'local'): Promise<void> {
+  const { install, installed, WIRING } = await import('./claude.js');
 
-  if (sub === 'status') {
     const file = install(root, scope, 'stet', { dryRun: true }).file;
     if (!installed(root, scope)) return out(dim('  not wired'));
     out(`  ${cool('wired')} — ${path.relative(root, file) || file}`);
@@ -337,15 +326,37 @@ async function claude(): Promise<void> {
         : `  ${warm('!')} Claude Code has never called any of it either.`);
       out(`    ${dim('hooks are loaded when a session starts — restart Claude Code, then check again.')}`);
     }
-    return;
+}
+
+
+async function claude(): Promise<void> {
+  const { CLAUDE_EVENTS, install, installCommands, installed, uninstall, uninstallCommands, WIRING } = await import('./claude.js');
+  // Local by default. A checked-in hook pointing at a binary a teammate has
+  // not installed fails on every tool call and gates nothing — the repo would
+  // claim a protection it is not providing, which is worse than no protection.
+  // `--project` opts into the shared form once the team has stet.
+  const scope = args.flags.project ? 'project' : 'local';
+  const sub = args.rest[0] ?? 'install';
+
+  if (sub === 'remove' || args.flags.remove) return claudeRemove(scope);
+  // Both halves, not one. The old check asked our own binary whether it
+  // implements each hook argument — which it always does, since we wrote both
+  // sides — and never asked whether Claude Code emits the event we are
+  // listening for. `PostCompact` passed that check for the life of the project
+  // and was never emitted by anything.
+  const unreal = WIRING.filter((w) => !(CLAUDE_EVENTS as readonly string[]).includes(w.event));
+  if (unreal.length) {
+    throw new Error(
+      `this build wires ${unreal.map((w) => w.event).join(', ')}, which Claude Code does not emit.\n` +
+        `       those hooks would never fire. real events: ${CLAUDE_EVENTS.join(', ')}`,
+    );
   }
 
-  // A hook that cannot be found fails quietly and the gate silently does not
-  // exist — which is worse than not installing it. Resolve it now, and pin an
-  // absolute path if `stet` is not on PATH.
+  if (sub === 'status') return claudeStatus(scope);
+
+  // The executable the hooks will name. `--command` overrides it; otherwise it
+  // is resolved below, preferring the short form and falling back to this build.
   let command = args.flags.command ? String(args.flags.command) : '';
-  // The binary you are. Always implements what this build implements, because
-  // it is this build.
   const self = `${process.execPath} ${fileURLToPath(new URL('../bin/stet.js', import.meta.url))}`;
   const need = WIRING.map((w) => w.arg);
   let pinned = '';
@@ -712,8 +723,6 @@ async function askShorthand(): Promise<void> {
     map[label(i)] = why[i] ?? (kind === 'text' && value.length > 90 ? value.slice(0, 87) + '…' : value);
   });
 
-  const list = (v: unknown): string[] =>
-    typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : [];
 
   const item = {
     id: uniqueId(String(args.flags.id ?? '') || slug(question)),
@@ -722,8 +731,8 @@ async function askShorthand(): Promise<void> {
     variants,
     ...(args.flags.how ? { how: String(args.flags.how) } : {}),
     ...(args.flags.notes ? { notes: String(args.flags.notes) } : {}),
-    ...(list(args.flags.globs).length ? { globs: list(args.flags.globs) } : {}),
-    ...(list(args.flags.tag).length ? { tags: list(args.flags.tag) } : {}),
+    ...(commaList(args.flags.globs).length ? { globs: commaList(args.flags.globs) } : {}),
+    ...(commaList(args.flags.tag).length ? { tags: commaList(args.flags.tag) } : {}),
   } as unknown as Item;
 
   assertItem(item);
@@ -1128,9 +1137,7 @@ function note(): void {
   // Scope is required, and that is the point. A note earns its keep by arriving
   // at the moment somebody touches the thing it is about; one with no place to
   // arrive is a document, and documents are what this failed to be three times.
-  const globs = typeof args.flags.globs === 'string'
-    ? args.flags.globs.split(',').map((g) => g.trim()).filter(Boolean)
-    : [];
+  const globs = commaList(args.flags.globs);
   if (!globs.length) {
     throw new Error(
       'a note needs --globs: it is delivered when somebody touches that path.\n' +
@@ -1212,15 +1219,13 @@ function directRule(): void {
   const text = args.rest.join(' ').trim();
   if (!text) throw new Error('usage: stet rule "never centre the hero" [--globs src/web/**] [--tag design]');
   init(root);
-  const list = (v: unknown): string[] =>
-    typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter(Boolean) : [];
-  const tags = list(args.flags.tag);
+  const tags = commaList(args.flags.tag);
   // A rule with globs is the one that arrives at the moment of the edit rather
   // than sitting in AGENTS.md hoping to be remembered. The canon has always
   // stored them and the gate has always used them; this was simply the one path
   // that could not set them, so the fastest way to record a rule was also the
   // only way that could not scope it.
-  const globs = list(args.flags.globs);
+  const globs = commaList(args.flags.globs);
   const rule = appendDirectRule(root, text, { tags, globs });
   sync(root, readRules(root), { budget });
   out(`  ${warm(String(rule.n))}  ${rule.text}`);

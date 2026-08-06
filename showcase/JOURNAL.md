@@ -1659,6 +1659,82 @@ The one thing `stet claude status` still says is honest and expected:
 
 ---
 
+## Working under its own gate, and a tidy-up
+
+The wiring was verified from the inside for the first time. Restarting Claude
+Code, `SessionStart` delivered this repo's canon as a system reminder — six
+method rules, arriving before any work began — and the first edit to
+`src/rules.ts` produced this, unprompted:
+
+```
+PreToolUse:Edit hook additional context: stet notes for src/rules.ts:
+· the second copy of weakness() lives in src/page.ts; src/rules.ts has the other
+· the provenance line is parsed by reading to the next field label, not the next full stop
+```
+
+Both notes were written yesterday, by hand, about bugs that had already cost a
+cycle each. Neither had to be remembered.
+
+### The report that looked wrong and was not
+
+The terminal said `SessionStart never called` while its output was demonstrably
+in the agent's context. The markers on disk settled it: `.fired-stop` at 13:33,
+`.fired-session-start` at **13:35**, `.fired-user-prompt` at 13:36. The status
+command had been run after the restart but before the resume — accurate at the
+moment it was taken. Reproduce before changing anything, and say plainly when it
+does not reproduce, which is rule 2 of the canon that had just been injected.
+
+### Finding 48 — a dead export, two releases old, written here
+
+A scan for exports nothing references turned up `restatesOption` in
+`src/rules.ts`: written in 0.20.0 alongside the question-detection fix,
+exported, and never called by anything. It would have flagged a verdict that
+merely repeats the option it chose.
+
+Same species as finding 40 — implemented, plausible, never wired — committed by
+the same author two releases after writing that one up.
+
+Deleted rather than wired. The idea needs a warning that fires on a failure
+nobody has observed, and this canon says a warning that fires on correct input
+trains people to ignore warnings. It is ten lines if evidence turns up.
+
+The scan is now a test, so the next one cannot sit for two releases. Exported
+types are exempt: an interface used only as an inferred return type has no
+textual reference, and demanding one would be exactly the over-eager warning
+being argued against.
+
+**The first version of that scan was itself wrong.** Written inline through a
+shell, it over-escaped its own regex — `\\b` reached JavaScript as a literal
+backslash — so every count came back zero and it reported ninety dead exports
+including `PAGE`, `serve` and `runHook`. A red signal is no more evidence than a
+green one; the instrument gets checked either way.
+
+### The tidy-up
+
+`claude()` was 173 lines doing three unrelated jobs. Split into
+`claudeRemove`, `claudeStatus` and the install path: 107 lines, byte-identical
+behaviour on all three.
+
+The comma-splitting helper existed **five times across three files**, under
+three different parameter names, and not all of them guarded the non-string
+case — so `--tag` with no value threw where `--globs` with no value returned
+nothing. One `commaList` now, in `src/text.ts`.
+
+### Finding 49 — my own guard fired on correct input
+
+The check added in the last release asserted that the suites leave no
+fired-markers in the checkout. It failed on this very run — correctly, and for
+the wrong reason: this repo is now wired under its own gate, so an ordinary edit
+during development writes a marker. The suite had touched nothing.
+
+The assertion was the wrong shape. What matters is not that no marker exists but
+that the suite **changed** none: fingerprint them before the run, compare after.
+Written the first way, it would have failed for every contributor doing exactly
+what `CONTRIBUTING.md` tells them to do — which is the definition of a warning
+people learn to ignore, and it was caught by the canon rule saying so.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1711,6 +1787,8 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 48 | a dead-export scan | `restatesOption` was exported and never called for two releases — written alongside a real fix and never wired, the same species as finding 40 |
+| 49 | the fix for 47 | the guard asserted the checkout had *no* hook markers, which fails the moment a developer works in this repo under its own gate — it had to assert the suite *changed* none |
 | 47 | wiring this repo under its own gate | `test/stress.mjs` fuzzed the hook CLI without a `cwd`, so forty hostile payloads fired hooks at the developer's own checkout — writing false evidence into the check built to be trustworthy |
 | 45 | **writing a rule scoped to `**/*.test.*`** | every glob containing a full stop or `**/` was silently truncated or dropped by the provenance parser, so `package.json` became the glob `package` and `**/*.test.*` became no scope at all — for the life of the project, in the mechanism the whole tool is built on |
 
@@ -1718,7 +1796,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other thirty-nine reported success while broken.
+other forty-one reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

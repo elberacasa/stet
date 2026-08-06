@@ -17,6 +17,28 @@ const run = (cmd, args, { input = '', cwd } = {}) => new Promise((done) => {
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const REPO = path.resolve(HERE, '..');
+/**
+ * Fingerprint of the fired-markers in the checkout, so the suites can prove
+ * they did not touch it.
+ *
+ * The first version asserted the repo had *no* markers, which fires the moment
+ * a developer works in this repo under stet's own gate — the documented setup.
+ * A check that fails on correct input is one people learn to ignore. What
+ * matters is that the suite changed nothing, not that nothing was there.
+ */
+function markerFingerprint(repo) {
+  const dir = path.join(repo, '.stet', 'sessions');
+  try {
+    return fs.readdirSync(dir)
+      .filter((n) => n.startsWith('.fired-'))
+      .sort()
+      .map((n) => `${n}@${fs.statSync(path.join(dir, n)).mtimeMs}`)
+      .join('|');
+  } catch {
+    return '';
+  }
+}
+const MARKERS_BEFORE = markerFingerprint(REPO);
 const BIN = path.join(REPO, 'bin', 'stet.js');
 const { init } = await import(`${REPO}/dist/store.js`);
 const { globToRegExp, matches } = await import(`${REPO}/dist/glob.js`);
@@ -147,14 +169,10 @@ console.log('\n6. hostile hook input over the real CLI');
   ok('every hook exits clean on garbage', bad === 0, `${inputs.length * 5} combinations`);
   // A suite that writes into the tree it is testing from is a suite that lies
   // about that tree. `stet claude status` reports which hooks have really been
-  // called; markers left here by a test would be false evidence in the one
-  // check built to be trustworthy.
-  const REPO = path.resolve(HERE, '..');
-  const leaked = fs.existsSync(path.join(REPO, '.stet', 'sessions'))
-    ? fs.readdirSync(path.join(REPO, '.stet', 'sessions')).filter((n) => n.startsWith('.fired-'))
-    : [];
-  ok('and none of it touched the repository it was run from', leaked.length === 0,
-    leaked.length ? `left ${leaked.join(', ')} in ./.stet/sessions` : 'working tree untouched');
+  // called; a marker written here by a test is false evidence in the one check
+  // built to be trustworthy.
+  ok('and none of it touched the repository it was run from', markerFingerprint(REPO) === MARKERS_BEFORE,
+    MARKERS_BEFORE === markerFingerprint(REPO) ? 'working tree unchanged' : 'the fuzz fired hooks at this checkout');
 }
 
 // ── 7. many agents at once — fan-out workflows, parallel subagents ───────

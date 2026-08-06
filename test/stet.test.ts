@@ -901,3 +901,37 @@ describe('sharpening a rule later', () => {
     expect(r.stdout).toMatch(/question/);
   });
 });
+
+// ── code nothing reaches ───────────────────────────────────────────────────
+describe('the source has no dead ends', () => {
+  it('exports no function or constant that nothing references', () => {
+    // `restatesOption` sat here exported and uncalled for two releases —
+    // written alongside a real fix, then never wired up. Same species as a hook
+    // implemented and never installed, which is finding 40.
+    //
+    // Types are exempt: an exported interface used only as an inferred return
+    // type has no textual reference, and demanding one would be a warning that
+    // fires on correct code.
+    const dir = (d: string) =>
+      fs.readdirSync(d).filter((f) => /\.(ts|mjs)$/.test(f)).map((f) => [path.join(d, f), fs.readFileSync(path.join(d, f), 'utf8')] as const);
+    const src = dir('src');
+    const all = [...src, ...dir('test')];
+
+    const dead: string[] = [];
+    for (const [file, text] of src) {
+      for (const m of text.matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)) {
+        const name = m[1];
+        let uses = 0;
+        for (const [f2, t2] of all) {
+          for (const hit of t2.matchAll(new RegExp(`\\b${name}\\b`, 'g'))) {
+            const line = t2.slice(t2.lastIndexOf('\n', hit.index) + 1, t2.indexOf('\n', hit.index));
+            if (f2 === file && /^export (async )?(function|const) /.test(line)) continue;
+            uses++;
+          }
+        }
+        if (uses === 0) dead.push(`${file} → ${name}`);
+      }
+    }
+    expect(dead, 'exported and never referenced').toEqual([]);
+  });
+});

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import type { Item, Rule } from './types.js';
 import { paths } from './store.js';
 import { withLock, writeAtomic } from './lock.js';
+import { commaList } from './text.js';
 
 export const HEADER = `# Rules
 
@@ -47,8 +48,8 @@ export function parseRules(text: string): Rule[] {
     // any rule scoped to `**/*.test.*` parsed as having no scope at all.
     const prov = /^\s*\*Earned from ([^,*]+), ([^.*]+)\.(.*)\*\s*$/m.exec(rest);
     const tail = prov?.[3] ?? '';
-    const tags = list(field(tail, 'Tags'));
-    const globs = list(field(tail, 'Globs'));
+    const tags = commaList(field(tail, 'Tags'));
+    const globs = commaList(field(tail, 'Globs'));
     const hits = Number(/Hits:\s*(\d+)/.exec(tail)?.[1] ?? 0);
 
     const body = rest
@@ -85,11 +86,6 @@ export function parseRules(text: string): Rule[] {
 function field(tail: string, name: string): string {
   const m = new RegExp(`${name}:\\s*(.*?)(?=\\s(?:Tags|Globs|Hits):|$)`).exec(tail);
   return m ? m[1].replace(/\.\s*$/, '') : '';
-}
-
-function list(s: string | undefined): string[] {
-  if (!s) return [];
-  return s.split(',').map((x) => x.trim()).filter(Boolean);
 }
 
 /** Appends a rule earned from a decided item. Returns the rule as stored. */
@@ -234,20 +230,13 @@ export function weakness(text: string): string | null {
   return null;
 }
 
-/**
- * The rule text a verdict would produce, checked against the thing that was
- * being judged. Restating an option is not a rule: it is the answer, and the
- * answer is already recorded as the verdict.
- */
-export function restatesOption(text: string, options: string[]): boolean {
-  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const t = norm(ruleLine(text));
-  if (!t) return false;
-  return options.some((o) => {
-    const n = norm(o);
-    return n.length > 0 && n === t;
-  });
-}
+// `restatesOption` lived here for two releases: written alongside the question
+// check, exported, never called by anything. It would have flagged a verdict
+// that merely repeats the option it chose. The idea is plausible and there is
+// no evidence it happens — and this canon says a warning that fires on correct
+// input trains people to ignore warnings. Speculative code that is already
+// shipped is the same shape as the hook wired to an event nobody emits, so it
+// is gone rather than quietly kept. It is ten lines if evidence turns up.
 
 /**
  * The third door into the canon: a correction typed straight in, with no

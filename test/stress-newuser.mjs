@@ -16,6 +16,29 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const REPO = path.resolve(HERE, '..');
 // Pack into a scratch directory, never into the repo being packed.
 const SP = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-pack-'));
+
+/**
+ * Fingerprint of the fired-markers in the checkout, so the suites can prove
+ * they did not touch it.
+ *
+ * The first version asserted the repo had *no* markers, which fires the moment
+ * a developer works in this repo under stet's own gate — the documented setup.
+ * A check that fails on correct input is one people learn to ignore. What
+ * matters is that the suite changed nothing, not that nothing was there.
+ */
+function markerFingerprint(repo) {
+  const dir = path.join(repo, '.stet', 'sessions');
+  try {
+    return fs.readdirSync(dir)
+      .filter((n) => n.startsWith('.fired-'))
+      .sort()
+      .map((n) => `${n}@${fs.statSync(path.join(dir, n)).mtimeMs}`)
+      .join('|');
+  } catch {
+    return '';
+  }
+}
+const MARKERS_BEFORE = markerFingerprint(REPO);
 const fail = [];
 const ok = (n, c, d = '') => { console.log(`  ${c ? '✓' : '✗'} ${n}${d ? `  ${d}` : ''}`); if (!c) fail.push(n); };
 
@@ -294,12 +317,8 @@ console.log('\n8. stet demo, on a machine with nothing set up');
 // containing the process, which is the checkout you are developing in.
 console.log('\n9. the working tree, after all of it');
 {
-  const sessions = path.join(REPO, '.stet', 'sessions');
-  const leaked = fs.existsSync(sessions)
-    ? fs.readdirSync(sessions).filter((n) => n.startsWith('.fired-'))
-    : [];
-  ok('no suite left hook evidence in the repository it ran from', leaked.length === 0,
-    leaked.length ? `left ${leaked.join(', ')}` : 'untouched');
+  ok('no suite left hook evidence in the repository it ran from',
+    markerFingerprint(REPO) === MARKERS_BEFORE, 'unchanged since the run began');
 }
 
 console.log(`\n${fail.length ? `FAILED (${fail.length}): ${fail.join(' | ')}` : 'the packaged artifact works end to end for a new user'}`);
