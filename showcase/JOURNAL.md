@@ -1305,6 +1305,95 @@ else's schema. Noted, not built.
 
 ---
 
+## Distilling the method, and what it exposed
+
+The brief was to take the working method behind this log and fuse it with Claude
+Code. The obvious move — write it up — is the one this project exists to argue
+against: an instruction in a document is read once, competes with everything
+after it, and is losing by turn sixty. The same is true of method as of taste.
+
+So the method is a canon. Eight rules, each earned from a specific recorded
+failure above, each carrying that failure in its body so the reasoning can be
+checked rather than taken, and two of them **scoped** — so they arrive as a
+system reminder at the moment an agent writes a test or touches the release
+config, not as advice at the top of a session.
+
+They pass stet's own quality check, all eight. A canon that fails its own gate
+is not a canon.
+
+It is never installed by `init`. A canon is a claim about what a repository
+believes, and filling one with claims its owner never made is precisely what
+this tool refuses to do everywhere else. `stet method`, or not at all.
+
+### Finding 45 — every glob with a dot in it was silently broken
+
+Writing the two scoped rules is what exposed it. The rule scoped to
+`test/**, tests/**, **/*.test.*, **/*.spec.*` never arrived. The one scoped to
+`package.json, .github/workflows/**, Dockerfile, Makefile` arrived on nothing.
+
+The globs matched fine — checked directly against the matcher. The scope never
+reached the matcher at all:
+
+```
+rule 3 globs: ["package"]     ← from: package.json, .github/workflows/**, Dockerfile, Makefile
+rule 5 globs: []              ← from: test/**, tests/**, **/*.test.*, **/*.spec.*
+```
+
+Two bugs in one line of parsing. The field was read with `[^.]*`, which stops at
+the first full stop — and a full stop is in almost every real glob. And the tail
+around it was captured with a pattern allowing `\*(?!\/)`, a star not followed
+by a slash, which `**/` violates on its second character.
+
+So `package.json, …` became the single glob `package` — a rule quietly governing
+a file that does not exist — and anything containing `**/` lost its scope
+entirely, which silently demotes a just-in-time rule to a session-preamble one.
+
+**Scoped rules are the mechanism this entire tool is built on.** The README
+calls them the difference between a rule that arrives when it applies and a rule
+that decays. And any scope written the way people actually write scopes —
+`src/**/*.tsx`, `**/*.test.ts`, `package.json` — has been silently discarded or
+mangled for the life of the project.
+
+Nothing could report it. A rule that matches nothing does not fail; it simply
+never arrives, which is indistinguishable from having nothing to say.
+
+It survived forty-four findings and one hundred and thirty-four tests because
+every glob anyone had ever tested with — `src/web/**`, `src/components/**`,
+`src/api/**`, `web/**` — happened to contain no dots. Not one test used a file
+extension. The test suite now walks six real shapes, including the three most
+common ways anyone writes a glob.
+
+### What the fusion actually looks like
+
+```
+$ stet method
+  8 method rules added to the canon
+
+$ # …later, an agent writes a test:
+stet rules that govern test/thing.test.ts — binding, already decided by this repo's owner:
+5. keep the reproduction as a permanent check, not only the fix
+
+$ # …or touches the release config:
+stet rules that govern package.json — binding, already decided by this repo's owner:
+3. test the artifact you ship, not the tree you built it in
+```
+
+That is the distillation delivered the way this tool argues everything should be
+delivered: not as a document somebody reads once, but as the right sentence at
+the moment it applies, from a hook, to the agent that is about to need it.
+
+And the rule that would have caught finding 45 is one of the eight:
+
+> a green signal is not evidence — look at the artifact a person would actually
+> touch
+
+The scoped rules reported success. `stet method` printed `8 method rules added`.
+The canon showed all eight. `stet rules` listed their globs. Every signal was
+green, and two of the eight governed nothing at all until somebody fired a hook
+at a real path and read what came back.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1356,12 +1445,13 @@ Not one of these was visible from reading the code.
 | 42 | re-wiring a pinned install | it recognised its own command files by sniffing for a string the pinned form does not contain, so it refused to update itself and left a stale command behind |
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
+| 45 | **writing a rule scoped to `**/*.test.*`** | every glob containing a full stop or `**/` was silently truncated or dropped by the provenance parser, so `package.json` became the glob `package` and `**/*.test.*` became no scope at all — for the life of the project, in the mechanism the whole tool is built on |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other thirty-six reported success while broken.
+other thirty-seven reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

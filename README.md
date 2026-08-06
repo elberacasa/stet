@@ -295,6 +295,41 @@ stet undo hero-type    # or a particular one — it goes back in the queue
 stet rule remove 4     # delete a rule outright; the others keep their numbers
 ```
 
+## The method canon
+
+Taste is not the only thing that fails to compound. Method does too — and an
+agent starts every session without any of it.
+
+```bash
+stet method          # or: stet method --list, to read them first
+```
+
+Eight rules, each one earned from a specific recorded failure in stet's own
+build log, and each carrying that failure in the canon so you can check the
+reasoning rather than take it:
+
+```
+reproduce a reported failure before changing anything, and say plainly when it does not reproduce
+a green signal is not evidence — look at the artifact a person would actually touch
+test the artifact you ship, not the tree you built it in            → package.json, .github/workflows/**
+verify against the other side's list, never against your own names
+keep the reproduction as a permanent check, not only the fix        → test/**, **/*.test.*
+a warning that fires on correct input trains people to ignore warnings
+never infer identity from content that varies — write an explicit marker
+when the same logic lives in two places, change both and add a check that they agree
+```
+
+Two of them are scoped, so they arrive as a system reminder at the moment an
+agent writes a test or touches the release config — not as advice at the top of
+a session that is gone by turn sixty.
+
+This is not a style guide. **Thirty-six of the forty-four bugs found in building
+stet reported success while broken**, and every rule above is the one that would
+have caught a specific one of them. It is never installed unless you ask: a
+canon is a claim about what your repository believes, and filling it with claims
+you never made is the thing this tool refuses to do everywhere else. Remove any
+of them with `stet rule remove <n>`.
+
 ## Why it is cheaper, not slower
 
 - A wrong guess costs a full build cycle plus a full rework cycle. Asking costs

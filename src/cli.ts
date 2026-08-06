@@ -92,6 +92,7 @@ const FLAGS: Record<string, string[]> = {
   demo: ['port', 'no-open'],
   undo: [],
   status: ['json'],
+  method: ['list'],
   init: [],
   schema: [],
   version: [],
@@ -190,6 +191,8 @@ async function main(): Promise<void> {
       return undo();
     case 'status':
       return status();
+    case 'method':
+      return method();
     case 'version':
     case '-v':
       return out(VERSION());
@@ -1006,6 +1009,51 @@ function status(): void {
   out();
 }
 
+/**
+ * Install the method canon — the rules that would have prevented this project's
+ * own recorded failures.
+ *
+ * Never on `init`. A canon is a claim about what a repository believes, and
+ * filling one with claims its owner never made is the thing stet refuses to do
+ * everywhere else. Asked for explicitly, or not at all.
+ */
+async function method(): Promise<void> {
+  const { METHOD } = await import('./method.js');
+  const norm = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  if (args.flags.list) {
+    out();
+    for (const r of METHOD) {
+      out(`  ${warm('·')} ${r.text}`);
+      if (r.globs?.length) out(`    ${dim(`arrives on ${r.globs.join(', ')}`)}`);
+    }
+    out();
+    out(dim(`  ${METHOD.length} rules. \`stet method\` writes them into this repo's canon.`));
+    out();
+    return;
+  }
+
+  init(root);
+  const existing = readRules(root).map((r) => norm(r.text));
+  let added = 0;
+  for (const r of METHOD) {
+    if (existing.includes(norm(r.text))) continue;
+    appendDirectRule(root, r.text, { tags: r.tags ?? ['method'], globs: r.globs ?? [], note: r.note });
+    added++;
+  }
+  sync(root, readRules(root), { budget });
+
+  out();
+  if (!added) {
+    out(dim('  already in this canon — nothing to add'));
+  } else {
+    out(`  ${cool(String(added))} method ${added === 1 ? 'rule' : 'rules'} added to the canon`);
+    out(dim('  each one carries the failure it was earned from — read them in .stet/RULES.md'));
+    out(dim('  remove any of them with `stet rule remove <n>`'));
+  }
+  out();
+}
+
 function undo(): void {
   const id = args.rest[0] ?? lastDecided(root)?.id;
   if (!id) throw new Error('nothing has been decided yet');
@@ -1076,6 +1124,8 @@ function help(): void {
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
   ${cool('stet rule remove')} <n>        delete a rule from the canon
+  ${cool('stet method')} [--list]        install the method canon — eight rules, each
+  ${dim('                            earned from a recorded failure in stet\'s own build')}
   ${cool('stet rules')} [--tag design]   print the canon
   ${cool('stet sync')} [--remove]        re-inject rules into agent surfaces, or restore them
 

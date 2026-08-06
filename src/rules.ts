@@ -41,10 +41,14 @@ export function parseRules(text: string): Rule[] {
     const ruleText = (m ? m[2] : heading).trim();
     if (!ruleText) continue;
 
-    const prov = /^\s*\*Earned from ([^,*]+), ([^.*]+)\.((?:[^*]|\*(?!\/))*)\*\s*$/m.exec(rest);
+    // Greedy to the final `*` on the line, not "any run of non-star characters".
+    // A glob contains stars, and `**/` in particular contains a star followed by
+    // a slash — which the previous pattern treated as the end of the field, so
+    // any rule scoped to `**/*.test.*` parsed as having no scope at all.
+    const prov = /^\s*\*Earned from ([^,*]+), ([^.*]+)\.(.*)\*\s*$/m.exec(rest);
     const tail = prov?.[3] ?? '';
-    const tags = list(/Tags:\s*([^.]*)\./.exec(tail)?.[1]);
-    const globs = list(/Globs:\s*([^.]*)\./.exec(tail)?.[1]);
+    const tags = list(field(tail, 'Tags'));
+    const globs = list(field(tail, 'Globs'));
     const hits = Number(/Hits:\s*(\d+)/.exec(tail)?.[1] ?? 0);
 
     const body = rest
@@ -65,6 +69,22 @@ export function parseRules(text: string): Rule[] {
     });
   }
   return rules;
+}
+
+/**
+ * One field out of the provenance line, which looks like:
+ *   *Earned from hero-type, 2026-08-06. Tags: design. Globs: src/**\/*.tsx.*
+ *
+ * Read to the next field label rather than to the next full stop. `[^.]*` was
+ * the original, and a full stop is in almost every real glob — `package.json`,
+ * `**\/*.ts`, `*.md` — so `Globs: package.json, .github/**` silently became the
+ * single glob `package`, and scoped rules quietly governed the wrong files or
+ * no files at all. Nothing reported it, because a rule that matches nothing
+ * simply never arrives.
+ */
+function field(tail: string, name: string): string {
+  const m = new RegExp(`${name}:\\s*(.*?)(?=\\s(?:Tags|Globs|Hits):|$)`).exec(tail);
+  return m ? m[1].replace(/\.\s*$/, '') : '';
 }
 
 function list(s: string | undefined): string[] {

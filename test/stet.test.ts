@@ -8,6 +8,8 @@ import { appendRule, appendDirectRule, bumpHits, estimateTokens, parseRules, rea
 import { hasBlock, insert, remove, sync, unsync } from '../src/sync.js';
 import { PAGE } from '../src/page.js';
 import { problems } from '../src/validate.js';
+import { METHOD } from '../src/method.js';
+import { matchesAny } from '../src/glob.js';
 import type { Item, Rule } from '../src/types.js';
 
 let root: string;
@@ -781,5 +783,90 @@ describe('the help', () => {
       const r = spawnSync('node', [BIN, cmd, '--help'], { cwd: root, encoding: 'utf8', timeout: 8000 });
       expect(r.stderr, `stet ${cmd} is advertised but not a command`).not.toMatch(/unknown command/);
     }
+  });
+});
+
+// ── the provenance line ────────────────────────────────────────────────────
+// Scoped rules are the mechanism this whole tool is built on, and the scope
+// survives only as text in RULES.md. The parser read a field with `[^.]*` —
+// stopping at the first full stop — and captured the tail with a pattern that
+// treated `**/` as the end of the line. Both are in almost every real glob.
+describe('globs survive the round trip', () => {
+  const shapes: Array<[string, string[]]> = [
+    ['a file with an extension', ['package.json']],
+    ['a dotted directory', ['.github/workflows/**']],
+    ['a star-dot glob', ['**/*.test.*']],
+    ['the common one', ['src/**/*.tsx']],
+    ['several, mixed', ['test/**', '**/*.spec.*', 'package.json']],
+    ['no dots at all — the shape that always worked', ['src/web/**']],
+  ];
+
+  for (const [label, globs] of shapes) {
+    it(`reads back ${label}`, () => {
+      appendDirectRule(root, `a rule scoped to ${label}`, { globs, tags: ['design'] });
+      const rule = readRules(root).at(-1);
+      expect(rule?.globs, `written: ${globs.join(', ')}`).toEqual(globs);
+      expect(rule?.tags).toEqual(['design']);
+    });
+  }
+
+  it('still reads tags and hits when the globs are full of dots', () => {
+    const md = '# Rules\n\n## 1 — a rule\n\n*Earned from x, 2026-08-06. Tags: ui, forms. Globs: src/**/*.tsx. Hits: 4.*\n';
+    const r = parseRules(md)[0];
+    expect(r.globs).toEqual(['src/**/*.tsx']);
+    expect(r.tags).toEqual(['ui', 'forms']);
+    expect(r.hits).toBe(4);
+  });
+
+  it('a rule whose scope was mangled would silently govern nothing', () => {
+    // The failure mode, stated: `Globs: package.json, .github/**` parsed as the
+    // single glob `package`, which matches a file literally named "package".
+    // Nothing reports a rule that never matches — it simply never arrives.
+    appendDirectRule(root, 'test the artifact you ship', { globs: ['package.json'] });
+    const rule = readRules(root).at(-1)!;
+    expect(matchesAny(rule.globs, 'package.json')).toBe(true);
+    expect(matchesAny(rule.globs, 'package')).toBe(false);
+  });
+});
+
+// ── the method canon ───────────────────────────────────────────────────────
+describe('the method canon', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  it('would not be flagged by the quality check it ships with', () => {
+    // A canon that fails its own gate is not a canon.
+    for (const r of METHOD) expect(weakness(r.text), r.text).toBeNull();
+  });
+
+  it('carries the failure each rule was earned from', () => {
+    for (const r of METHOD) expect(r.note.length, r.text).toBeGreaterThan(40);
+  });
+
+  it('is never installed without being asked for', () => {
+    // A canon is a claim about what a repository believes. Filling one with
+    // claims its owner never made is what stet refuses to do everywhere else.
+    expect(readRules(root)).toEqual([]);
+    expect(run(['method', '--list']).status).toBe(0);
+    expect(readRules(root), '--list must not write').toEqual([]);
+  });
+
+  it('installs, and adds nothing the second time', () => {
+    expect(run(['method']).status).toBe(0);
+    expect(readRules(root)).toHaveLength(METHOD.length);
+    run(['method']);
+    expect(readRules(root)).toHaveLength(METHOD.length);
+  });
+
+  it('keeps the scopes it claims, which is the whole point of shipping them', () => {
+    run(['method']);
+    const scoped = readRules(root).filter((r) => r.globs.length);
+    expect(scoped.length).toBeGreaterThan(0);
+    for (const r of scoped) {
+      for (const g of r.globs) expect(g, `${r.text} lost its scope`).not.toBe('');
+    }
+    const tests = readRules(root).find((r) => r.text.includes('reproduction as a permanent check'));
+    expect(matchesAny(tests!.globs, 'test/thing.test.ts')).toBe(true);
+    expect(matchesAny(tests!.globs, 'src/index.ts')).toBe(false);
   });
 });
