@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { globToRegExp, matches, matchesAny } from '../src/glob.js';
-import { canonOnce, churn, EVENTS, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
+import { expand, matches, matchesAny } from '../src/glob.js';
+import { canonOnce, churn, EVENTS, loadSession, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
 import { install, installed, settingsPath, uninstall, WIRING } from '../src/claude.js';
 import { init } from '../src/store.js';
 
@@ -50,12 +50,29 @@ describe('glob', () => {
   it('escapes regex metacharacters in literal segments', () => {
     expect(matches('a+b/c.ts', 'a+b/c.ts')).toBe(true);
     expect(matches('a+b/c.ts', 'aab/cxts')).toBe(false);
-    expect(globToRegExp('x.ts').test('xats')).toBe(false);
+    expect(matches('x.ts', 'xats')).toBe(false);
   });
 
   it('handles an empty or missing glob list', () => {
     expect(matchesAny(undefined, 'a.ts')).toBe(false);
     expect(matchesAny([], 'a.ts')).toBe(false);
+    expect(matchesAny([1, null, {}] as unknown as string[], 'a.ts')).toBe(false);
+  });
+
+  it('does not blow up on nested wildcards', () => {
+    // A regex-based matcher cost 8x per nested `**`; ten of them took minutes,
+    // inside a hook that runs on every write. This must stay linear.
+    const victim = `a/${'x/'.repeat(40)}c.js`;
+    const t0 = performance.now();
+    for (const n of [1, 4, 16, 40]) matches(`a${'/**'.repeat(n)}/b.js`, victim);
+    matches(`${'*'.repeat(400)}.ts`, `${'y'.repeat(400)}.js`);
+    expect(performance.now() - t0).toBeLessThan(100);
+  });
+
+  it('caps brace expansion so nested braces cannot explode', () => {
+    expect(expand('{a,b}/{c,d}.ts').sort()).toEqual(['a/c.ts', 'a/d.ts', 'b/c.ts', 'b/d.ts']);
+    expect(expand('{a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}{o,p}', 16).length).toBeLessThanOrEqual(16);
+    expect(expand('unclosed{a,b')).toEqual(['unclosed{a,b']);
   });
 });
 
@@ -191,6 +208,22 @@ describe('churn — taste said out loud instead of written down', () => {
     postToolUse(root, { ...edit('src/hero.tsx', 'p2'), prompt_id: undefined });
     postToolUse(root, edit('../outside.ts', 'p3'));
     expect(churn(root, 'c1')).toHaveLength(0);
+  });
+
+  it('survives a torn line in the journal', () => {
+    // Appends from parallel hooks can in principle interleave. A damaged line
+    // must cost that one record, not the session.
+    postToolUse(root, edit('src/hero.tsx', 'p1'));
+    const file = path.join(root, '.stet', 'sessions', 'c1.jsonl');
+    fs.appendFileSync(file, '{"t":"e","p":"src/hero.tsx","q":"tor\n');
+    postToolUse(root, edit('src/hero.tsx', 'p2'));
+    postToolUse(root, edit('src/hero.tsx', 'p3'));
+    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3 }]);
+  });
+
+  it('records each instruction once however many writes it caused', () => {
+    for (let i = 0; i < 20; i++) postToolUse(root, edit('src/hero.tsx', 'p1'));
+    expect(loadSession(root, 'c1').edits['src/hero.tsx']).toEqual(['p1']);
   });
 
   it('never lets the journal interfere with the gate', () => {

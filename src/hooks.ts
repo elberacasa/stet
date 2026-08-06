@@ -71,8 +71,27 @@ export function targetPath(root: string, input: HookInput): string | null {
 
 // ── session memory: never inject the same rule twice ──────────────────────
 
+/**
+ * An append-only log, not a state file. PostToolUse fires on every write and
+ * Claude Code runs tool calls in parallel, so read-modify-write loses updates —
+ * measured at six lost out of forty. Appends do not race, and a torn line is
+ * skipped on read instead of destroying the whole file.
+ */
 function sessionFile(root: string, id: string): string {
-  return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+  return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.jsonl`);
+}
+
+type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string };
+
+function append(root: string, id: string | undefined, rec: Record_): void {
+  if (!id) return;
+  const file = sessionFile(root, id);
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, `${JSON.stringify(rec)}\n`);
+  } catch {
+    /* a hook must never be the reason a tool call fails */
+  }
 }
 
 /**
@@ -84,30 +103,36 @@ function blank(): Session {
   return { injected: [], edits: {}, flagged: [], at: 0 };
 }
 
+/** Folds the log. Unparseable lines are skipped — a half-written record must
+ *  not cost the whole session. */
 export function loadSession(root: string, id: string | undefined): Session {
-  if (!id) return blank();
+  const s = blank();
+  if (!id) return s;
+  let text: string;
   try {
-    const raw = JSON.parse(fs.readFileSync(sessionFile(root, id), 'utf8'));
-    return {
-      injected: raw.injected ?? [],
-      edits: raw.edits ?? {},
-      flagged: raw.flagged ?? [],
-      at: raw.at ?? 0,
-    };
+    text = fs.readFileSync(sessionFile(root, id), 'utf8');
   } catch {
-    return blank();
+    return s;
   }
-}
-
-function save(root: string, id: string | undefined, s: Session): void {
-  if (!id) return;
-  const file = sessionFile(root, id);
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ ...s, at: Date.now() }));
-  } catch {
-    /* a hook must never be the reason a tool call fails */
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let r: Record_;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (r.t === 'e' && typeof r.p === 'string' && typeof r.q === 'string') {
+      const list = (s.edits[r.p] ??= []);
+      if (!list.includes(r.q)) list.push(r.q);
+    } else if (r.t === 'i' && Number.isInteger(r.n)) {
+      if (!s.injected.includes(r.n)) s.injected.push(r.n);
+    } else if (r.t === 'f' && typeof r.p === 'string') {
+      if (!s.flagged.includes(r.p)) s.flagged.push(r.p);
+    }
   }
+  s.injected.sort((a, b) => a - b);
+  return s;
 }
 
 function seen(root: string, id: string | undefined): Set<number> {
@@ -115,10 +140,7 @@ function seen(root: string, id: string | undefined): Set<number> {
 }
 
 function remember(root: string, id: string | undefined, ns: number[]): void {
-  if (!id || !ns.length) return;
-  const s = loadSession(root, id);
-  s.injected = [...new Set([...s.injected, ...ns])].sort((a, b) => a - b);
-  save(root, id, s);
+  for (const n of ns) append(root, id, { t: 'i', n });
 }
 
 /** Sessions are cheap files; drop the ones older than a day when we pass by. */
@@ -247,12 +269,7 @@ export function postToolUse(root: string, input: HookInput): HookOutput | null {
   const prompt = input.prompt_id ?? '';
   if (!prompt) return null;
 
-  const s = loadSession(root, input.session_id);
-  const seenPrompts = s.edits[rel] ?? [];
-  if (!seenPrompts.includes(prompt)) {
-    s.edits[rel] = [...seenPrompts, prompt];
-    save(root, input.session_id, s);
-  }
+  append(root, input.session_id, { t: 'e', p: rel, q: prompt });
   return null;
 }
 
@@ -280,8 +297,7 @@ export function stop(root: string, input: HookInput, threshold = CHURN_THRESHOLD
   const fresh = churn(root, input.session_id, threshold).filter((c) => !s.flagged.includes(c.path));
   if (!fresh.length) return null;
 
-  s.flagged = [...s.flagged, ...fresh.map((c) => c.path)];
-  save(root, input.session_id, s);
+  for (const c of fresh) append(root, input.session_id, { t: 'f', p: c.path });
 
   const lines = [
     'stet: unwritten taste detected.',

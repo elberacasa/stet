@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 
 interface Args {
   cmd: string;
@@ -110,7 +110,9 @@ async function hook(): Promise<void> {
   }
   let input: import('./hooks.js').HookInput = {};
   try {
-    input = JSON.parse(await readStdin());
+    // Bounded: a caller that opens stdin and never closes it would otherwise
+    // hold the tool call open until the hook timeout, on every tool call.
+    input = JSON.parse(await readStdin(2000));
   } catch {
     process.exit(0);
   }
@@ -212,14 +214,14 @@ async function showChurn(): Promise<void> {
   const dir = path.join(paths(root).stet, 'sessions');
   let files: string[] = [];
   try {
-    files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
   } catch {
     /* no sessions yet */
   }
 
   const total = new Map<string, number>();
   for (const f of files) {
-    const id = f.replace(/\.json$/, '');
+    const id = f.replace(/\.jsonl$/, '');
     for (const c of churn(root, id, threshold)) total.set(c.path, (total.get(c.path) ?? 0) + c.revisions);
     // a file below the threshold in one session may still be worth seeing
     for (const [p, prompts] of Object.entries(loadSession(root, id).edits)) {
@@ -471,12 +473,22 @@ function resolves(cmd: string): Promise<boolean> {
   });
 }
 
-function readStdin(): Promise<string> {
+function readStdin(timeoutMs = 0): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn();
+    };
+    const timer = timeoutMs
+      ? setTimeout(() => done(() => reject(new Error('timed out reading stdin'))), timeoutMs)
+      : null;
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (c) => (data += c));
-    process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', reject);
+    process.stdin.on('end', () => done(() => resolve(data)));
+    process.stdin.on('error', (e) => done(() => reject(e)));
   });
 }
