@@ -262,6 +262,37 @@ Claude Code's actual tool-call format, `⏺ Update(...)` above `⎿ Error:`,
 rather than an invented one. The point of the hero is recognition, and a
 developer-only example asks the reader to translate before they can react.
 
+### Rewriting the page around the product, not the mechanism
+
+Read back cold, the page explained hooks, token counts and a decay curve, and
+never once showed the thing you actually do. It read as agent memory with extra
+steps — because the product was not on its own landing page, and the difference
+from memory was never stated.
+
+Two sections were added and the hero was re-pointed:
+
+- **The product, first.** A recording of the real decision screen sits directly
+  under the hero: two versions of a landing page in one frame, the flip, the
+  verdict, the reveal, the rule entering the canon. Above it, three panels in
+  the reader's own language — *"Make the buttons rounder." It rounds the buttons
+  and restyles the nav.*
+- **This is not agent memory.** A six-row comparison, which is the honest way to
+  answer the objection rather than avoid it. Memory infers a preference from a
+  conversation and offers it back; a canon records a judgment made while looking
+  at the work, with labels hidden, and then enforces it. The page says outright
+  that both can be true at once.
+- The hero no longer ends on the refusal. It says what happens ten seconds later.
+
+### Finding 12 — the canon showed the rule you had just replaced
+
+Recording the new GIF surfaced it. Sharpening a rule at the reveal changes
+neither the pending list nor the rule count, and the page's re-render signature
+was `[pending ids, rule count]` — so the canon screen kept rendering the
+unsharpened line while the disk, `AGENTS.md` and the API all had the new one.
+
+The signature now covers rule text. Worth noting how it was caught: not by a
+test, but by screenshotting the canon for a promotional GIF and reading it.
+
 ---
 
 ## Running tally of bugs found by use, across the whole project
@@ -285,6 +316,7 @@ Not one of these was visible from reading the code.
 | 13 | the same capture | the nav overflowed at 390px — caught by the tool the page advertises |
 | 14 | the same capture | profile cleanup raced Chrome's exit and failed a capture after every shot succeeded |
 | 15 | a screenshot of the page | SVG `<text>` cannot wrap, so every box in the loop diagram overflowed its own border |
+| 16 | recording the demo GIF | the canon kept showing a rule after it was sharpened — the re-render signature tracked rule count, not rule text |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported

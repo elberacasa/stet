@@ -144,6 +144,32 @@ footer{border-top:1px solid var(--line);padding:70px 0 64px;text-align:center}
 .flinks a{color:var(--dim)}
 .tiny{font-size:11px;color:var(--faint);margin-top:24px}
 
+/* ── the product itself ───────────────────────────────────────────────── */
+.shot{margin-top:44px}
+.shot img{display:block;width:100%;height:auto;border:1px solid var(--line-2);border-radius:9px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);background:var(--bg)}
+kbd{font:inherit;font-size:11px;border:1px solid var(--line-2);border-radius:4px;
+  padding:1px 6px;color:var(--ink);background:rgba(0,0,0,.28)}
+.feels{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:52px}
+@media(max-width:860px){.feels{grid-template-columns:1fr}}
+.feels div{border-left:2px solid var(--line-2);padding:2px 0 2px 16px}
+.feels div:last-child{border-left-color:var(--cool)}
+.feels b{display:block;font-weight:400;color:var(--ink);font-size:12.5px;margin-bottom:8px}
+.feels p{color:var(--faint);font-size:12.5px;line-height:1.65}
+
+/* ── memory vs canon ──────────────────────────────────────────────────── */
+table.vs{margin-top:44px}
+table.vs td:first-child{color:var(--faint);width:22%}
+table.vs td:nth-child(2){color:var(--faint);width:34%}
+table.vs td:nth-child(3){color:var(--dim)}
+table.vs th:nth-child(3){color:var(--warm)}
+@media(max-width:760px){
+  table.vs,table.vs tbody,table.vs tr,table.vs td,table.vs th{display:block;width:100%}
+  table.vs tr{border-bottom:1px solid var(--line);padding:12px 0}
+  table.vs td,table.vs th{border:none;padding:3px 0}
+  table.vs th:empty{display:none}
+}
+
 /* ── the loop ─────────────────────────────────────────────────────────── */
 .loop{list-style:none;display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:48px}
 .loop li{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:8px;
@@ -236,11 +262,12 @@ section.tint .loopback span{background:var(--bg-2)}
      of being thrown away. I will work elsewhere, or block on your verdict:
        <span class="g">stet await delete-flow</span></div>
 
-  <h1>That is an agent<br>being stopped mid-write,<br>because <em>you had not decided.</em></h1>
+  <h1>Your agent stopped,<br>because <em>only you</em><br>can answer this.</h1>
 
-  <p class="body">Agents hit forks with no right answer — which type, which copy, how much
-  abstraction — and they guess, because they are trained to finish. stet refuses the write,
-  asks you once, and makes your verdict binding on every agent that touches the repo.</p>
+  <p class="body">Ten seconds later a page opens showing both versions of your actual
+  screen. You look, you pick, you say why in one line. The agent carries on with your
+  answer — and <b style="color:var(--ink);font-weight:400">never asks you that question
+  again</b>, in this session or any future one, in any agent you use.</p>
 
   <div class="ctas">
     <button class="cmd" id="copy" type="button"><span class="p">$</span> npx stetmark <span class="hint" id="hint">⧉ copy</span></button>
@@ -248,6 +275,37 @@ section.tint .loopback span{background:var(--bg-2)}
   </div>
   <p class="free">Zero runtime dependencies · nothing leaves your machine · no account, no key, no network</p>
 </div></header>
+
+<!-- ═══ THE MOMENT — show the product, not the mechanism ═══ -->
+<section id="moment"><div class="wrap">
+  <div class="label">the five seconds that replace the argument</div>
+  <h2>Two versions of your screen. <em>Flip between them.</em> Pick.</h2>
+  <p class="body">This is the whole interface. Both variants sit in the same frame, so pressing
+  <kbd>S</kbd> swaps them in place, pixel for pixel — the way you would flick between two layers
+  rather than compare two thumbnails. A spacing change you would never spot side by side is
+  obvious in the flicker.</p>
+
+  <figure class="shot">
+    <img src="loop.gif" alt="The stet decision screen: two versions of a landing page hero flipping in the same frame, a verdict committed, the reveal showing what each variant actually was, and the rule entering the canon" loading="lazy">
+    <figcaption>The real screen, recorded. <b>Labels are shuffled</b> — while you are choosing,
+    neither you nor the agent knows which approach is which, so you judge the work and not the
+    idea you already liked. What A and B actually were is revealed only after you commit, and
+    that reveal is the first moment you can write a rule worth obeying.</figcaption>
+  </figure>
+
+  <div class="feels">
+    <div><b>You have had this argument</b>
+      <p>“Make the buttons rounder.” It rounds the buttons and restyles the nav. “No, just the
+      buttons.” Three prompts later you are further from where you started than when you began.</p></div>
+    <div><b>And you have had it twice</b>
+      <p>Next week, new session, and the agent picks the same font you rejected — because the
+      conversation where you rejected it is gone, and nothing you said was written anywhere it
+      will read.</p></div>
+    <div><b>So it stops asking you</b>
+      <p>One verdict becomes one line in a file every agent reads. Not a summary of a chat: the
+      sentence you wrote, the day you wrote it, and the decision it came from.</p></div>
+  </div>
+</div></section>
 
 <!-- ═══ PROBLEM ═══ -->
 <section id="problem"><div class="wrap">
@@ -273,6 +331,42 @@ section.tint .loopback span{background:var(--bg-2)}
       differently, forever. Nothing you decided is written anywhere an agent will read.</p>
     </div>
   </div>
+</div></section>
+
+<!-- ═══ NOT MEMORY ═══ -->
+<section id="notmemory"><div class="wrap">
+  <div class="label">this is not agent memory</div>
+  <h2>Memory records what you <em>said.</em><br>A canon records what you <span class="c">chose.</span></h2>
+  <p class="body">Every agent now ships some form of memory, and it is a genuinely useful thing.
+  It is also a different thing. Memory infers a preference from a conversation and offers it back
+  as a suggestion. stet captures a judgment you made while looking at the actual work, with the
+  labels hidden, and then enforces it.</p>
+
+  <table class="vs">
+    <tr><th></th><th>agent memory</th><th>a stet canon</th></tr>
+    <tr><td>where it comes from</td>
+        <td>inferred from things you typed in chat</td>
+        <td><b>a verdict you gave on the real artifact, side by side</b></td></tr>
+    <tr><td>how you saw the options</td>
+        <td>you did not — the agent had already chosen</td>
+        <td><b>both, in the same frame, with the labels shuffled</b></td></tr>
+    <tr><td>what it does to the agent</td>
+        <td>advisory — it is context the model may or may not follow</td>
+        <td><b>the write is refused until you have ruled</b></td></tr>
+    <tr><td>who reads it</td>
+        <td>the vendor that wrote it</td>
+        <td><b>AGENTS.md, CLAUDE.md, .cursorrules, .windsurfrules</b></td></tr>
+    <tr><td>can you audit it</td>
+        <td>it accumulates on its own; you rarely look</td>
+        <td><b>a markdown file: every line dated, with the decision it came from</b></td></tr>
+    <tr><td>what happens on compaction</td>
+        <td>whatever the summariser keeps</td>
+        <td><b>restated, because that is when preferences get lost</b></td></tr>
+  </table>
+
+  <p class="body" style="margin-top:34px">Both can be true at once — keep your memory. The
+  difference that matters is the last two rows: a canon is a file you can read, edit and delete,
+  and it is the only one of the two that can stop an agent from guessing.</p>
 </div></section>
 
 <!-- ═══ INSIGHT ═══ -->

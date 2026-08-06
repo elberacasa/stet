@@ -809,7 +809,14 @@ function setConn(state,text){
 }
 
 function apply(next){
-  var sig=JSON.stringify([next.pending.map(function(p){return p.id+(p.ok?"":"!")}),next.counts.rules]);
+  // The signature must cover rule TEXT, not just the count. Sharpening a rule
+  // after the reveal changes neither the count nor the pending list, so a
+  // count-only signature left the canon showing the line you just replaced.
+  var sig=JSON.stringify([
+    next.pending.map(function(p){return p.id+(p.ok?"":"!")}),
+    next.counts.rules,
+    next.rules.map(function(r){return r.n+":"+r.text})
+  ]);
   var wasEmpty=!okPending().length;
   S=next;
   if(sig!==lastSig||!lastSig){
