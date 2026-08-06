@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { PAGE } from './page.js';
-import { appendRule, bumpHits, readRules, reviseRule, ruleLine } from './rules.js';
+import { appendRule, bumpHits, readRules, removeRule, reviseRule, ruleLine } from './rules.js';
 import { sync } from './sync.js';
 import { assetPath, blind, decide, listEntries, paths, revealText, validId } from './store.js';
 import type { Entry } from './types.js';
@@ -133,6 +133,17 @@ export async function serve(root: string, opts: ServerOpts = {}) {
         .then((body) => {
           const { n, text } = JSON.parse(body || '{}');
           if (!Number.isInteger(n)) return json(res, 400, { error: 'which rule?' });
+          // Empty means: this verdict earned no rule. The decision is already
+          // recorded and keeps its reason; the canon simply does not take a
+          // line that would not work as one. Before this, an empty sharpen box
+          // fell back to the original reason — so a screen that had just said
+          // "your reason will not work as a rule" wrote exactly that reason.
+          if (!String(text ?? '').trim()) {
+            const gone = removeRule(root, n);
+            const surfaces = sync(root, readRules(root), { budget: opts.budget });
+            push();
+            return json(res, 200, { rule: null, removed: gone, surfaces });
+          }
           const rule = reviseRule(root, n, String(text ?? ''));
           const surfaces = sync(root, readRules(root), { budget: opts.budget });
           push();

@@ -654,7 +654,9 @@ function renderRevealRail(){
   var original=r.rule.text;
   var born=weakness(original);
   var text=draft.sharpen!==null?draft.sharpen:(born?"":original);
-  var injected=text.trim()||original;
+  // No fallback when the original was refused. Doing nothing must not commit
+  // the very sentence the screen just said would not work.
+  var injected=text.trim()||(born?"":original);
   var warn=weakness(injected);
   return '<div class="rail reveal-rail"><div class="rail-inner">'+
     '<div class="rulecard">'+
@@ -662,11 +664,13 @@ function renderRevealRail(){
         '<span class="dim">'+esc(r.revealed||"")+"</span></div>"+
       '<div class="field"><input id="sharpen" value="'+esc(text)+'" placeholder="'+
         (born?"what should the next agent do? — your reason will not work as a rule":"what should the next agent do?")+'"></div>'+
-      '<div class="preview"><span class="pk">agents will read</span><code>'+r.rule.n+". "+esc(injected)+"</code></div>"+
-      (warn?'<div class="warn">'+esc(warn)+"</div>":"")+
+      (injected
+        ? '<div class="preview"><span class="pk">agents will read</span><code>'+r.rule.n+". "+esc(injected)+"</code></div>"
+        : '<div class="preview"><span class="pk">agents will read</span><code>nothing — the verdict stands, the canon takes no rule</code></div>')+
+      (warn&&injected?'<div class="warn">'+esc(warn)+"</div>":"")+
       '<div class="surfaces">'+(surf?"synced → "+esc(surf):"in every agent surface in this repo")+"</div></div>"+
-    '<button class="commit'+(warn?" anyway":"")+'" id="next">'+
-      (warn?"let it stand anyway":"let it stand")+' <kbd>⏎</kbd></button>'+
+    '<button class="commit'+(warn&&injected?" anyway":"")+'" id="next">'+
+      (injected?(warn?"let it stand anyway":"let it stand"):"keep the verdict, no rule")+' <kbd>⏎</kbd></button>'+
   "</div></div>";
 }
 

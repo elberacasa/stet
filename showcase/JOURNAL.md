@@ -2212,6 +2212,85 @@ use it on something that was not the tool.
 
 ---
 
+## The first canon built by somebody else
+
+Three decisions judged, in a real project, by a real person. The canon that came
+out:
+
+```
+1  i love how the color blue looks with that palette
+2  i dont see a difference between abc so A it is
+3  i like the Round 01 text and looks
+```
+
+Three rules, none of them a rule, all of them now binding on every future agent
+in that repository. This is the product — the thing everything else in stet
+exists to fill — and its first real contents are noise.
+
+Run against the check that is supposed to prevent exactly this:
+
+```
+PASSED  "i love how the color blue looks with that palette"
+PASSED  "i dont see a difference between abc so A it is"
+CAUGHT  "i like the Round 01 text and looks"
+```
+
+### Finding 59 — a denylist of verbs, and every new person brings a new verb
+
+The first-person check was a list: *think, guess, feel, like, prefer, would,
+reckon*. It was written after "I think go with the flow" got through in this
+repo, and it was extended to exactly the verb that had failed.
+
+"i love" is not in the list. Neither is "i dont". Enumerating the ways a
+sentence can be about its speaker is a losing game.
+
+A rule essentially never begins with the word "I" — not one of the eight method
+rules does, and neither does any rule anyone has written here on purpose. So
+that is the check now: `^i\b`. Ten real rules pass it, including the awkward
+ones that start with a preposition or a noun.
+
+Rule 2 carried a second failure the label check missed. `\b[ab]\s+(is|was)\b`
+catches "A is" but not "so A it is" — deciding out loud rather than instructing,
+in a grammar the pattern had not seen.
+
+### Finding 60 — the screen wrote the sentence it had just refused
+
+Rule 3 *was* caught. It went in anyway, and not because anybody insisted.
+
+The reveal step is careful: when the reason will not survive as a rule, the
+sharpen field starts **empty**, the placeholder says *"your reason will not work
+as a rule"*, and the button reads *"let it stand anyway"*. That was finding 5's
+fix — make the weak outcome cost something.
+
+One line under it:
+
+```js
+var injected = text.trim() || original;
+```
+
+Type nothing, press Enter, and the fallback injects the very reason the screen
+had just refused. The protection was real and the default defeated it — a screen
+that says *this will not work* and then does it anyway if you do nothing.
+
+Now an empty box means what it says. The verdict is recorded and keeps its
+reason; the canon takes nothing. The button says so — *keep the verdict, no
+rule* — and the preview reads *nothing — the verdict stands, the canon takes no
+rule*.
+
+### The part that is not about wording
+
+Rule 2 is also a report: *"i dont see a difference between abc"*. Three variants
+were built as three genuinely different mechanisms, rendered live, and the human
+could not tell them apart. Whatever else is true, that decision was not worth the
+interruption, and no amount of rule-quality checking fixes it.
+
+stet can refuse a question that announces its own answer, and one whose variants
+are byte-identical. It has nothing to say about three variants that are
+*different in the code and the same to a person* — which is the harder and more
+common failure, and the next honest thing to work on.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -2264,6 +2343,8 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 59 | **the first canon a stranger built** | the first-person check was a list of verbs, so "i love" and "i dont" went straight through, and "so A it is" missed the variant-label pattern — two of three junk rules were never even flagged |
+| 60 | the same three rules | the third *was* flagged, and the reveal wrote it anyway: an empty sharpen box fell back to the original, so a screen saying "this will not work as a rule" injected exactly that on Enter |
 | 57 | **an agent unblocking itself** | `stet undo` removes a pending decision, so a denied tool call can be un-denied by the thing it denied — and deleting it left no trace for the person it was addressed to |
 | 58 | reading where the previews pointed | two decisions pointed at a preview server the agent started mid-session: when it stops they render blank, and a decision is supposed to wait for a human overnight |
 | 55 | a screenshot of the real decision screen | with three variants the verdict bar bound `C` and `something else` to the same key — the handler was right and the label lied, leaving no key for "something else" at all |
@@ -2282,7 +2363,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other fifty reported success while broken.
+other fifty-two reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

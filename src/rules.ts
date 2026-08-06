@@ -204,8 +204,23 @@ export function weakness(text: string): string | null {
   }
   // "I think go with the flow" passed every check above and told the next
   // agent nothing. A rule written in the first person is a note to yourself.
-  if (/^(i\s+(think|guess|feel|like|prefer|would|reckon)|i'?d|maybe|probably|let'?s)\b/i.test(t)) {
+  //
+  // This was a list of verbs — think, guess, feel, like, prefer, would, reckon
+  // — and the first real canon built by a stranger got "i love how the colour
+  // blue looks" and "i dont see a difference" straight past it. Enumerating the
+  // ways a sentence can be about the speaker is a losing game; every new person
+  // brings a new verb. A rule essentially never begins with "I", so that is the
+  // check. None of the method rules do, and neither does any rule anyone here
+  // has written on purpose.
+  if (/^i(\s|'|$)/i.test(t) || /^(maybe|probably|let'?s)\b/i.test(t)) {
     return 'written to yourself, not to an agent — drop the "I" and say what to do';
+  }
+  // Deciding out loud rather than instructing: "so A it is", "go with B".
+  // The labels are shuffled per decision, so this is unusable by next week —
+  // the same failure as naming a variant, in the grammar of a choice.
+  if (/\b(so|then|pick(ed)?|choose|chose|go with|going with)\s+[abc]\b/i.test(t)
+    || /\b[abc]\s+(it is|wins|for me|then)\b/i.test(t)) {
+    return 'names a variant label — those are shuffled per decision and mean nothing later';
   }
   // The one that got through in the wild: "they both look the same? can you
   // please review" became rule 1 of somebody's canon on their first use. Every

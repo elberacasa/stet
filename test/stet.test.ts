@@ -1122,3 +1122,46 @@ describe('discarding leaves a mark', () => {
     expect(outp).toMatch(/which-spacing/);
   });
 });
+
+// ── a reason the canon should not take ─────────────────────────────────────
+// The first canon a stranger built came out as: "i love how the color blue
+// looks", "i dont see a difference between abc so A it is", "i like the Round
+// 01 text". Two slipped past the check entirely; the third was caught, and the
+// screen wrote it anyway because an empty sharpen box fell back to the original.
+describe('what the canon refuses to take', () => {
+  it('catches a reason written about the speaker, whatever the verb', () => {
+    // This was a list — think, guess, feel, like, prefer, would, reckon — and
+    // every new person brings a new verb. A rule essentially never starts "I".
+    for (const t of [
+      'i love how the color blue looks with that palette',
+      'i dont see a difference between abc so A it is',
+      'i like the Round 01 text and looks',
+      "i'd keep the quieter one",
+    ]) expect(weakness(t), t).toMatch(/written to yourself/);
+  });
+
+  it('catches deciding out loud instead of instructing', () => {
+    for (const t of ['so B it is', 'go with C', 'i picked A then']) {
+      expect(weakness(t), t).not.toBeNull();
+    }
+  });
+
+  it('still takes the rules people write on purpose', () => {
+    for (const t of [
+      'never centre the hero',
+      'buttons say what happens, never "Submit"',
+      'when the list is empty, say what to do next',
+      'in a modal, the primary action sits on the right',
+      'identify the user before showing prices',
+      'error copy names the next action, not the failure',
+    ]) expect(weakness(t), t).toBeNull();
+  });
+
+  it('offers no rule rather than the refused one, when nothing is typed', () => {
+    // The screen empties the field and says the reason will not work as a rule.
+    // It then used to inject exactly that reason if you pressed Enter.
+    expect(PAGE, 'no silent fallback to the original').toContain('||(born?"":original)');
+    expect(PAGE).toContain('the canon takes no rule');
+    expect(PAGE).toContain('keep the verdict, no rule');
+  });
+});
