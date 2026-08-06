@@ -150,6 +150,12 @@ main{padding-bottom:190px}
    .conn.live — a bare .live matched both, and every rule meant for the frame
    was silently being applied to the status dot in the header. */
 .liveframe{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel);
+  /* Width first, height derived. Given only an aspect-ratio and a min-height
+     the browser resolves the other way — 300px tall at 16/10 is 480px wide —
+     so a third variant, whose column is narrower than that, pushed the frames
+     over each other and the page scrolled sideways. Two variants never showed
+     it: their columns were wider than 480 on any normal screen. */
+  width:100%;max-width:100%;
   aspect-ratio:16/10;min-height:300px;margin-bottom:8px;
   /* a real app is taller than a 16:10 box — let the human drag it open */
   resize:vertical}
@@ -354,7 +360,7 @@ a.urlblock span{color:var(--faint)}
     <div class="keys">
       <div><kbd>A</kbd> <kbd>B</kbd></div><span>pick that variant</span>
       <div><kbd>1</kbd> <kbd>2</kbd></div><span>pick by position</span>
-      <div><kbd>3</kbd></div><span>a verdict of your own</span>
+      <div><kbd>3</kbd></div><span>a verdict of your own — the number after the last variant</span>
       <div><kbd>S</kbd></div><span>flip variants in place — same frame, one thing changing</span>
       <div><kbd>/</kbd></div><span>write the rule</span>
       <div><kbd>⏎</kbd></div><span>commit — then again to move on</span>
@@ -590,7 +596,12 @@ function renderRail(entry){
   var gcls=len>110?"gauge over":len>72?"gauge warm":"gauge";
   return '<div class="rail'+'"><div class="rail-inner">'+
     '<div class="picks">'+picks+
-      '<button class="pick'+(other?" on":"")+'" data-pick="*">something else<kbd>3</kbd></button></div>'+
+      // The key comes after the variants, not a fixed 3. With A/B it is 3 as
+      // it always was; with a third variant, 3 picks C and this said 3 too —
+      // the label advertising a key that does something else, and no key at
+      // all for the thing it is labelling.
+      '<button class="pick'+(other?" on":"")+'" data-pick="*">something else'+
+        (vs.length<9?"<kbd>"+(vs.length+1)+"</kbd>":"")+"</button></div>"+
     '<div class="why">'+
       (other?'<div class="field"><input id="custom" placeholder="your verdict, in your words — e.g. keep both, ship them as a picker" value="'+esc(draft.custom)+'"></div>':"")+
       '<div class="field"><input id="rule" placeholder="why — your reason, while you still cannot see which is which" value="'+esc(draft.rule)+'">'+
@@ -863,7 +874,7 @@ document.addEventListener("keydown",function(e){
   if(vs.indexOf(up)!==-1){e.preventDefault();pick(up);return}
   var num=parseInt(e.key,10);
   if(num>=1&&num<=vs.length){e.preventDefault();pick(vs[num-1]);return}
-  if(e.key==="3"&&vs.length<3){e.preventDefault();pick("",true)}
+  if(num===vs.length+1&&vs.length<9){e.preventDefault();pick("",true)}
 });
 el("helpBtn").addEventListener("click",function(){el("help").hidden=!el("help").hidden});
 el("help").addEventListener("click",function(){el("help").hidden=true});

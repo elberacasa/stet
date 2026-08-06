@@ -2066,6 +2066,68 @@ reachable from inside this repository.
 
 ---
 
+## The screenshot that said the tool could not work
+
+A screenshot arrived with a sentence attached: *"why would i pick a color i
+cant even see there? thats code... i think my goal is not possible, and stet
+has no option to succeed."*
+
+The screenshot was right. The conclusion was not, and the difference is the
+most useful thing in this log.
+
+What was on screen: three cards reading `Warm apricot #D98E63 (current)`,
+`Pale signal blue #7FA6D9`, `Cool celadon #7FB09A`. Nobody can pick a colour
+from that. The tool had faithfully rendered exactly what it was handed, and
+what it was handed was unjudgeable.
+
+Ninety seconds later, the same decision, using nothing that did not already
+exist: three copies of the user's own timer, identical but for the accent
+variable, queued as live `--url` variants. Three running apps side by side, the
+accent visible in the fuse ticks, labels shuffled, blind.
+
+**stet could always do this.** The agent chose text. The tool accepted it.
+
+### Finding 55 — the key that advertised the wrong thing
+
+Visible in the same screenshot: the verdict bar read `C 3` and
+`something else 3`. Two buttons, one key.
+
+The handler was correct — `3` picked variant C, and the "something else" branch
+was guarded to fire only below three variants. So the key did the right thing
+and **the label lied about it**, and with three variants there was no key at all
+for the thing the label named. The number is derived from the variant count on
+both sides now.
+
+Finding 39 — the help advertising a command that does not exist — repeated in
+the interface rather than the CLI.
+
+### Finding 56 — three live frames overflowed their columns
+
+Once the good decision rendered, the frames were 480px wide inside 427px
+columns. The page scrolled sideways and the third variant ran off the edge.
+
+`.liveframe` carried `aspect-ratio:16/10` and `min-height:300px` and no width.
+Given only those, the browser resolves the other way: 300px tall at 16/10 is
+480px wide, and that beat the grid column. Two variants never showed it, because
+two columns on any normal screen are wider than 480. It took a third variant to
+make the constraint bite — and the only reason there was a third variant is that
+a stranger's agent asked a three-way question.
+
+### And one landmine walked straight into
+
+Fixing that, the build broke. The comment written into `src/page.ts` contained
+backticks, which terminate the template literal the whole document lives in.
+
+There is a note in this repository about exactly that, scoped to exactly that
+file. It did not fire, because the edit was made by a Python script rather than
+the Edit tool — no `PreToolUse`, no hook, no reminder. The gate protects an
+agent editing a file. It cannot protect a script writing one.
+
+That limitation is now itself a note, which is the only honest thing to do with
+it.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -2118,6 +2180,8 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 55 | a screenshot of the real decision screen | with three variants the verdict bar bound `C` and `something else` to the same key — the handler was right and the label lied, leaving no key for "something else" at all |
+| 56 | the same screenshot, once fixed | three live frames were 480px wide in 427px columns: aspect-ratio plus min-height and no width resolves height-first, and two variants were never narrow enough to show it |
 | 54 | standing in the blocked project | a pending decision denies writes to every path it claims and had no way out — `undo` walked a decided item back, nothing walked a queued one away, so a bad question held a gate until you deleted a directory by hand |
 | 52 | **a stranger's project, first real decision** | the blind test was voided by the item's own content — variant A said "(current)" and the question said "I picked warm apricot", so the shuffle protected nothing |
 | 53 | the same decision | an accent colour asked as three hex codes: unjudgeable, in the one tool whose pitch is showing the real artifact |
@@ -2132,7 +2196,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-six reported success while broken.
+other forty-eight reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

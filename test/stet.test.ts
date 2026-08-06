@@ -1049,3 +1049,25 @@ describe('discarding a pending decision', () => {
     expect(fs.existsSync(path.join(root, '.stet/pending/which-spacing'))).toBe(true);
   });
 });
+
+// ── the decision screen with more than two variants ────────────────────────
+describe('three variants', () => {
+  it('gives "something else" the key after the last variant, not a fixed 3', () => {
+    // With A/B it was 3 and always had been. With a third variant, 3 picks C
+    // and the button still said 3 — advertising a key that does something
+    // else, and leaving no key at all for the thing it labels.
+    expect(PAGE).toContain('vs.length+1');
+    expect(PAGE, 'the old fixed binding is gone').not.toMatch(/e\.key==="3"/);
+  });
+
+  it('sizes a live frame from its column, not from its own height', () => {
+    // aspect-ratio + min-height alone resolves the other way: 300px tall at
+    // 16/10 is 480px wide, so a third variant — whose column is narrower than
+    // that — pushed the frames over each other and scrolled the page sideways.
+    // Two variants never showed it; their columns were wider than 480.
+    const rule = /\.liveframe\{[^}]*\}/.exec(PAGE)?.[0] ?? '';
+    expect(rule).toContain('width:100%');
+    expect(rule).toContain('max-width:100%');
+    expect(rule).toContain('aspect-ratio:16/10');
+  });
+});

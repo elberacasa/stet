@@ -48,3 +48,7 @@ somebody already stepped on. Anything may add one; nothing here is binding.
 ## 11 — the session journal is append-only and ordered, so the most recent {t:'p'} before an {t:'e'} is the instruction that caused that edit — no undocumented payload field needed for the join
 
 *Learned 2026-08-06. Globs: src/hooks.ts.*
+
+## 12 — editing this file through a script bypasses the PreToolUse hook, so the no-backticks rule is not enforced there — the build error is the only warning you get
+
+*Learned 2026-08-06. Globs: src/page.ts.*
