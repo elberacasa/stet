@@ -1,0 +1,62 @@
+{
+  "id": "hero-lead",
+  "question": "What should the landing page lead with?",
+  "notes": "Same content, same palette, same type scale, same build — captured at the same 1200px viewport. Only the order of the argument differs: one states the promise and then proves it, the other shows the proof first and explains it after.",
+  "how": "Read only the top third, the way someone who has never heard of this reads it. One of these asks you to take a claim on faith for four lines. The other shows you a machine refusing an agent before it says a word about why. Then check the live pages and narrow the window — one of them holds up at phone width and one does not.",
+  "tags": [
+    "design",
+    "copy"
+  ],
+  "globs": [
+    "showcase/site/**"
+  ],
+  "map": {
+    "A": "proof first — the actual deny message is the hero, the headline explains what you just read",
+    "B": "promise first — headline states the claim, the refusal appears lower as evidence"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        {
+          "kind": "image",
+          "src": "A-1.jpg",
+          "view": "desktop"
+        },
+        {
+          "kind": "url",
+          "href": "http://127.0.0.1:7900/variant-b.html",
+          "title": "the running page",
+          "view": "live"
+        },
+        {
+          "kind": "text",
+          "view": "argument",
+          "text": "Leads with the one thing no competitor can show: an agent being refused mid-write. It is concrete, it is unfamiliar, and it cannot be written by a tool that does not do it.\n\nThe cost: it demands ten seconds of reading a terminal message before any context, and a reader who does not already know what a coding agent is will bounce off it entirely."
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        {
+          "kind": "image",
+          "src": "B-4.jpg",
+          "view": "desktop"
+        },
+        {
+          "kind": "url",
+          "href": "http://127.0.0.1:7900/variant-a.html",
+          "title": "the running page",
+          "view": "live"
+        },
+        {
+          "kind": "text",
+          "view": "argument",
+          "text": "Conventional and legible. A stranger reads a claim they can evaluate in one breath, and the proof is waiting below when they want it.\n\nThe cost: 'your agents ask once, your answer stands' is a sentence any tool could write. Nothing in the first screen is falsifiable, and the thing that makes stet unlike anything else is below the fold."
+        }
+      ]
+    }
+  ],
+  "created": "2026-08-06T01:09:36.176Z"
+}

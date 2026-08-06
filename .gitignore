@@ -7,11 +7,11 @@ dist/
 # The handoff brief: planning notes and product strategy, not part of the tool.
 BRIEF.md
 
-# stet's own working state. Pending decisions are transient, and in this repo
-# the canon was only ever test fixtures. In a real project you would commit
-# .stet/RULES.md and AGENTS.md — that is the whole point of them.
-.stet/
-AGENTS.md
+# stet's own working state at the repo root. Transient, and this repo's canon
+# was only ever test fixtures. Note the leading slash: showcase/.stet IS
+# committed, because the decisions taken there are the story.
+/.stet/
+/AGENTS.md
 
 # Local Claude Code wiring. `stet claude` writes machine-specific paths here
 # until stetmark is installed globally, so it is per-developer, not shared.

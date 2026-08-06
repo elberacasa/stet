@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 
 interface Args {
   cmd: string;
@@ -76,6 +76,8 @@ async function main(): Promise<void> {
       return showChurn();
     case 'schema':
       return schema();
+    case 'init':
+      return doInit();
     case 'version':
     case '--version':
       return out(VERSION);
@@ -206,6 +208,31 @@ async function claude(): Promise<void> {
     out(`    they will fire and do nothing. ${cool('npm i -g stetmark@latest')}${dim(', then re-run stet claude')}`);
   }
   out(`  ${dim('undo with')} stet claude remove`);
+  out();
+}
+
+/**
+ * Start a project here, even inside another one. Every other command walks up
+ * to the nearest ancestor `.stet/`, which is right for a repo and wrong for a
+ * monorepo package or an example folder — without this there was no way to have
+ * taste that belongs to a subdirectory.
+ */
+function doInit(): void {
+  const here = process.cwd();
+  const p = paths(here);
+  if (fs.existsSync(p.stet)) return out(dim(`  already a stet project — ${path.relative(here, p.stet) || '.stet'}`));
+
+  const ancestor = findRoot(here);
+  init(here);
+  const surfaces = sync(here, readRules(here), { budget });
+  out();
+  out(`  ${cool('initialised')} ${path.relative(here, p.stet) || '.stet'}`);
+  for (const s of surfaces) out(`  ${dim(s.action.padEnd(9))} ${s.path}`);
+  if (ancestor !== here) {
+    out();
+    out(`  ${dim('note:')} ${path.relative(here, ancestor) || ancestor} is also a stet project.`);
+    out(`  ${dim('this directory now keeps its own canon; the one above no longer applies here.')}`);
+  }
   out();
 }
 
@@ -456,6 +483,7 @@ function help(): void {
 
   ${cool('stet')}                        init, wire agent surfaces, serve, watch, notify
   ${cool('stet ask')} < item.json        queue a decision — this is how agents call it
+  ${cool('stet init')}                   start a project here, even inside another one
   ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
