@@ -365,26 +365,42 @@ function globOverlaps(a: string, b: string): boolean {
  * more reliably than instructions they have to look up. It costs about a
  * hundred tokens, once, and it is the difference between a gate and an ornament.
  */
+/**
+ * How to ask, and that notes exist. The single most important text in the tool:
+ * everything else is downstream of an agent deciding to ask instead of guess.
+ *
+ * Kept here as one string because it goes to two places — the vendor-neutral
+ * `AGENTS.md` block, and the SessionStart hook. It used to go only to the file,
+ * which is a channel whose loading was never verified: Claude Code's documented
+ * memory file is `CLAUDE.md`, and stet only writes that one if it already
+ * exists. So the canon arrived through a hook that is now provably called,
+ * while the instruction that causes anything to happen at all travelled on a
+ * file that may never be read.
+ */
+export const HOW_TO_ASK = [
+  'At a fork this canon does not cover, where both options work and taste decides',
+  '(design, copy, layout, naming, tone), do not pick for the human. Ask:',
+  '',
+  '  stet ask "Which empty state?" "Nothing here yet" "Start a project" --wait',
+  '  stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait',
+  '',
+  '--wait blocks until a human rules, then prints the verdict; blocking beats a',
+  'guess that costs a rebuild. To keep working meanwhile, drop --wait and add',
+  "--globs 'src/hero/**' — writes there are denied until the verdict.",
+  '',
+  'When this repo teaches you something that was not obvious from reading it —',
+  'a second copy of a function, a footgun, a constraint you had to discover —',
+  'record it so nobody relearns it. You may write these; only a human writes rules:',
+  '',
+  '  stet note "<the fact>" --globs \'src/thing.ts\'',
+].join('\n');
+
 function preamble(): string {
   return [
     'STET RULES — verdicts this repo\'s owner already gave. Binding; follow them',
     'without asking again.',
     '',
-    'At a fork this canon does not cover, where both options work and taste decides',
-    '(design, copy, layout, naming, tone), do not pick for the human. Ask:',
-    '',
-    '  stet ask "Which empty state?" "Nothing here yet" "Start a project" --wait',
-    '  stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait',
-    '',
-    '--wait blocks until a human rules, then prints the verdict; blocking beats a',
-    'guess that costs a rebuild. To keep working meanwhile, drop --wait and add',
-    "--globs 'src/hero/**' — writes there are denied until the verdict.",
-    '',
-    'When this repo teaches you something that was not obvious from reading it —',
-    'a second copy of a function, a footgun, a constraint you had to discover —',
-    'record it so nobody relearns it. You may write these; only a human writes rules:',
-    '',
-    '  stet note "<the fact>" --globs \'src/thing.ts\'',
+    HOW_TO_ASK,
     '',
     // The wiring is per-developer, so nothing checked in can tell a teammate
     // it is missing. This line can, and it costs about twenty tokens once.

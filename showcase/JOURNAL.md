@@ -1735,6 +1735,69 @@ people learn to ignore, and it was caught by the canon rule saying so.
 
 ---
 
+## Finding 50 — the sentence that starts the loop was on the unverified channel
+
+Working under stet's own gate, the canon arrived at session start as a system
+reminder. The instruction telling an agent *to ask in the first place* did not.
+
+That instruction lived in `AGENTS.md`. Every other thing stet says travels
+through a hook — and as of the previous release, those hooks are provably
+called. `AGENTS.md` had never been checked against anything.
+
+Against the other side's list:
+
+```
+$ rg -o "CLAUDE\.md|AGENTS\.md" <claude-code's own plugin marketplace> | sort | uniq -c
+  125 CLAUDE.md
+    1 AGENTS.md
+```
+
+The single `AGENTS.md` mention is a security agent listing untrusted data
+sources, not a memory file being loaded. And stet writes `CLAUDE.md` **only if
+it already exists** — this repository has none, so the entire activation
+instruction was sitting in a file with no evidence that Claude Code reads it.
+
+The canon travelled on a channel verified to fire. The sentence that causes
+anything to happen at all travelled on a declaration.
+
+That is the same shape as finding 43 — `PostCompact` — one layer up: not a hook
+wired to an event nobody emits, but the most important text in the tool routed
+through a file nobody confirmed is read.
+
+### The fix, and what it cost
+
+`HOW_TO_ASK` is one exported string now, used by both the `AGENTS.md` block and
+the `SessionStart` hook. One source, because two copies of the sentence that
+starts the loop would drift and the drift would be invisible — each channel
+looking fine on its own. A test asserts the file surface contains exactly the
+string the hook sends.
+
+It is sent even when the canon is empty. A repository with no verdicts yet is
+precisely the one that needs an agent to know it can ask; before this,
+`SessionStart` returned nothing there at all.
+
+**224 tokens, once per session**, and once more on the far side of a compaction
+— because `PreCompact` clears the session record, so the first thing said into
+the fresh context is how to ask.
+
+### Two corrections the existing tests forced
+
+Making it unconditional broke four tests, and all four were right.
+
+Three asserted that a *second* `SessionStart` in the same session says nothing.
+That property matters and I had discarded it. The instruction is deduplicated
+per session now, like the rules and the notes — recorded in the same session
+journal.
+
+The fourth was `runHook('/does/not/exist', 'session-start', {})`, which had
+started returning the instruction. Explaining `stet ask` in a directory with no
+`.stet/` is noise, and an agent acting on it would create a project nobody asked
+for. It says nothing outside a project now, and there is a test for that too.
+
+Four failing tests, four real defects in a change that looked finished.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1787,6 +1850,7 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 50 | **working under its own gate** | the instruction telling an agent to ask lived only in `AGENTS.md` — a file Claude Code is not documented to read, and which stet writes `CLAUDE.md` alongside only if one already exists. Everything else travelled on a hook proven to fire |
 | 48 | a dead-export scan | `restatesOption` was exported and never called for two releases — written alongside a real fix and never wired, the same species as finding 40 |
 | 49 | the fix for 47 | the guard asserted the checkout had *no* hook markers, which fails the moment a developer works in this repo under its own gate — it had to assert the suite *changed* none |
 | 47 | wiring this repo under its own gate | `test/stress.mjs` fuzzed the hook CLI without a `cwd`, so forty hostile payloads fired hooks at the developer's own checkout — writing false evidence into the check built to be trustworthy |
@@ -1796,7 +1860,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-one reported success while broken.
+other forty-two reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

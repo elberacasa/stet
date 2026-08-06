@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { matchesAny } from './glob.js';
-import { DEFAULT_BUDGET, readRules, renderRule, selectRules } from './rules.js';
+import { DEFAULT_BUDGET, HOW_TO_ASK, readRules, renderRule, selectRules } from './rules.js';
 import { readNotes, type Note } from './notes.js';
 import { listEntries, paths } from './store.js';
 import type { Rule } from './types.js';
@@ -36,6 +36,8 @@ interface Session {
   injected: number[];
   /** Note numbers already shown this session. Separate from `injected`. */
   notesSeen: number[];
+  /** Whether this session has been told how to ask. */
+  askSent: boolean;
   /** repo-relative path → the distinct prompts that caused a write to it */
   edits: Record<string, string[]>;
   /** paths already surfaced as churn, so it is said once */
@@ -84,7 +86,7 @@ function sessionFile(root: string, id: string): string {
   return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.jsonl`);
 }
 
-type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string } | { t: 'n'; n: number };
+type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string } | { t: 'n'; n: number } | { t: 'a' };
 
 function append(root: string, id: string | undefined, rec: Record_): void {
   if (!id) return;
@@ -103,7 +105,7 @@ function append(root: string, id: string | undefined, rec: Record_): void {
  * every other session read in the same process.
  */
 function blank(): Session {
-  return { injected: [], notesSeen: [], edits: {}, flagged: [], at: 0 };
+  return { injected: [], notesSeen: [], askSent: false, edits: {}, flagged: [], at: 0 };
 }
 
 /** Folds the log. Unparseable lines are skipped — a half-written record must
@@ -132,6 +134,8 @@ export function loadSession(root: string, id: string | undefined): Session {
       if (!s.injected.includes(r.n)) s.injected.push(r.n);
     } else if (r.t === 'f' && typeof r.p === 'string') {
       if (!s.flagged.includes(r.p)) s.flagged.push(r.p);
+    } else if (r.t === 'a') {
+      s.askSent = true;
     } else if (r.t === 'n' && Number.isInteger(r.n)) {
       // Numbered separately from rules: both start at 1 and they are different
       // things, so one namespace would silently suppress the other.
@@ -333,8 +337,33 @@ export function canonOnce(root: string, input: HookInput, event: string, budget 
       `${pending} decision${pending === 1 ? '' : 's'} awaiting a human verdict. Writes into paths they claim will be denied.`,
     );
   }
+  // At the top of a session, and again around compaction, say how to ask.
+  //
+  // This is the only instruction that causes anything to happen — everything
+  // else in stet is downstream of an agent deciding to ask instead of guess —
+  // and it used to travel only in AGENTS.md. That file's loading was never
+  // verified against Claude Code, whose documented memory file is CLAUDE.md,
+  // which stet writes only if it already exists. The canon arrived through a
+  // hook proven to fire while the thing that starts the loop did not.
+  //
+  // Unlike the rules below it, this is sent even when the canon is empty: a
+  // repository with no verdicts yet is exactly the one that needs an agent to
+  // know it can ask.
+  // Once per session, like everything else here. `preCompact` deletes the
+  // session record before calling this, so it is said again on the far side of
+  // a compaction — which is the point.
+  // …and only where there is a project to ask in. Explaining `stet ask` in a
+  // directory with no .stet/ is noise, and acting on it would create one where
+  // nobody asked for it.
+  const inProject = fs.existsSync(paths(root).stet);
+  const say = inProject
+    && (event === 'SessionStart' || event === 'PreCompact')
+    && !loadSession(root, input.session_id).askSent;
+  if (say) parts.unshift(HOW_TO_ASK);
+
   if (!parts.length) return null;
 
+  if (say) append(root, input.session_id, { t: 'a' });
   remember(root, input.session_id, sel.chosen.map((r) => r.n));
   return { hookSpecificOutput: { hookEventName: event, additionalContext: parts.join('\n\n') } };
 }

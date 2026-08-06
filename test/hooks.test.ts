@@ -6,7 +6,7 @@ import { expand, matches, matchesAny } from '../src/glob.js';
 import { canonOnce, churn, EVENTS, lastFired, loadSession, postToolUse, preCompact, preToolUse, runHook, stop, sweepSessions, targetPath } from '../src/hooks.js';
 import { CLAUDE_EVENTS, install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
 import { addItem, init } from '../src/store.js';
-import { appendDirectRule, readRules } from '../src/rules.js';
+import { appendDirectRule, HOW_TO_ASK, readRules, renderBlock, selectRules } from '../src/rules.js';
 import { appendNote, readNotes, removeNote, thin } from '../src/notes.js';
 import { withLock } from '../src/lock.js';
 import { sync } from '../src/sync.js';
@@ -148,7 +148,11 @@ describe('just-in-time rules', () => {
     expect(out?.hookSpecificOutput?.additionalContext).toContain('awaiting a human verdict');
   });
 
-  it('says nothing when there is nothing to say', () => {
+  it('tells a repo with no canon yet how to ask, then says nothing more', () => {
+    // Day one is exactly when an agent needs to know it can ask. What must not
+    // repeat is the saying of it — once per session, like the rules.
+    const first = canonOnce(root, { session_id: 'sC', cwd: root }, 'SessionStart');
+    expect(first?.hookSpecificOutput?.additionalContext).toContain('stet ask');
     expect(canonOnce(root, { session_id: 'sC', cwd: root }, 'SessionStart')).toBeNull();
   });
 });
@@ -646,5 +650,56 @@ describe('observed firing', () => {
     }
     const perCall = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
     expect(perCall, `${perCall.toFixed(2)}ms per in-process hook call`).toBeLessThan(5);
+  });
+});
+
+// ── the instruction that starts the loop ───────────────────────────────────
+describe('how to ask', () => {
+  it('arrives at session start even when the canon is empty', () => {
+    // A repository with no verdicts yet is exactly the one that needs an agent
+    // to know it can ask. Before this, SessionStart returned null there.
+    expect(readRules(root)).toEqual([]);
+    const ctx = runHook(root, 'session-start', { session_id: 'h1', cwd: root })
+      ?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('stet ask');
+    expect(ctx).toContain('--wait');
+    expect(ctx, 'and that notes are the half an agent may write').toContain('stet note');
+  });
+
+  it('comes before the canon, because it is what makes any of it happen', () => {
+    appendDirectRule(root, 'never centre the hero', {});
+    const ctx = runHook(root, 'session-start', { session_id: 'h2', cwd: root })
+      ?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx.indexOf('stet ask')).toBeLessThan(ctx.indexOf('never centre the hero'));
+  });
+
+  it('is restated around compaction, which is when it would be summarised away', () => {
+    const ctx = runHook(root, 'pre-compact', { session_id: 'h3', cwd: root })
+      ?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('stet ask');
+  });
+
+  it('does not repeat on every prompt', () => {
+    // UserPromptSubmit exists to deliver a rule earned mid-session. Repeating
+    // the whole instruction there would cost tokens on every turn.
+    runHook(root, 'session-start', { session_id: 'h4', cwd: root });
+    const ctx = runHook(root, 'user-prompt', { session_id: 'h4', cwd: root })
+      ?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).not.toContain('stet ask');
+  });
+
+  it('is the same text the file surfaces carry, not a second copy', () => {
+    // Two copies of the sentence that starts the loop would drift, and the
+    // drift would be invisible: each channel would look fine on its own.
+    expect(renderBlock(selectRules([], { budget: 1500 }))).toContain(HOW_TO_ASK);
+  });
+});
+
+// Explaining how to ask where there is no project to ask in is noise — and
+// acting on the advice would create a .stet/ nobody asked for.
+describe('outside a project', () => {
+  it('says nothing at all', () => {
+    expect(runHook('/does/not/exist', 'session-start', {})).toBeNull();
+    expect(runHook('/does/not/exist', 'pre-compact', {})).toBeNull();
   });
 });

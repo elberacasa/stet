@@ -247,6 +247,15 @@ context is prompt-cached, so the cost saving is smaller than the token saving;
 and the real win is placement, not size — a reminder immediately before the
 decision beats a preamble sixty turns behind it.
 
+**The instruction that starts the loop arrives through the hook, not a file.**
+`SessionStart` delivers how to ask — and how to record a note — before any work
+begins, even in a repo with an empty canon, because day one is exactly when an
+agent needs to know it can ask. stet still writes a vendor-neutral `AGENTS.md`
+for other tools, but Claude Code's documented memory file is `CLAUDE.md`, and
+stet only writes that one if it already exists. Sending the thing that causes
+everything else down a channel whose loading was never verified was the last
+place this tool trusted a declaration over evidence.
+
 **A verdict binds the session that asked for it.** `SessionStart` states the
 canon once at the top. But a rule you earn *mid-session* — the one the agent is
 sitting there waiting for — has already missed that, and an unscoped rule never
