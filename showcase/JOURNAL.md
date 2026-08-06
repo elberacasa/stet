@@ -150,6 +150,51 @@ reported success right up until it did not.
 
 ---
 
+## The capture rig, and the bug it had for ten minutes
+
+`stet capture A=<url> B=<url>` now exists: every variant at every view, one
+command. Zero dependencies still holds — it drives a Chrome the machine already
+has, and when there is none it prints the rig it would have run so an agent with
+its own browser tools can do it by hand.
+
+The first version asked for a window: `--window-size=320,740`. All four shots
+reported success.
+
+### Finding 7 — a capture that is the right size and the wrong picture
+
+The 320px capture was cropped, not reflowed. The platform is entitled to refuse
+a window that small, so Chrome laid the page out at its minimum width and cut
+the image down to the size that was asked for. The result had exactly the
+requested dimensions and showed a desktop layout with the right-hand third
+missing — the header nav sliced mid-word.
+
+It was only visible because the image was **looked at**. Every automated signal
+said fine: process exited 0, file written, PNG header 320x740.
+
+The fix is to stop asking for a window and set the viewport the page actually
+lays out against, through `Emulation.setDeviceMetricsOverride`. Node ships a
+WebSocket client, so speaking DevTools Protocol costs no dependency:
+
+```
+  asked  1280 → page laid out at 1280 ✓
+  asked   390 → page laid out at 390 ✓
+  asked   320 → page laid out at 320 ✓
+  asked   280 → page laid out at 280 ✓
+```
+
+And because that failure is invisible by construction, `capture` now measures
+`innerWidth` after every shot and says so when it does not match:
+
+```
+  ✗ live-narrow  320x740  55KB  laid out at 500px, not 320
+```
+
+A capture rig that silently crops is worse than none: it would have produced a
+matched pair that looked authoritative and was a lie, and a verdict given on it
+would have entered the canon as fact.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -166,6 +211,7 @@ Not one of these was visible from reading the code.
 | 8 | this showcase | asset filenames leaked the blind mapping into the DOM |
 | 9 | this showcase | a glob relative to the wrong root matched nothing and gated nothing, silently |
 | 10 | two real verdicts | the sharpen step made keeping a useless rule the cheapest action |
+| 11 | looking at a capture | `--window-size` cropped instead of reflowing: right dimensions, wrong picture, every signal green |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported

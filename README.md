@@ -73,6 +73,19 @@ screen — so the only difference in the frame is the thing being decided.
 | an app | screens, or one screen in three states |
 | an API | the response, and the caller code |
 
+Taking those captures is one command, and it drives a browser the machine
+already has — no dependency, nothing downloaded:
+
+```bash
+stet capture A=http://localhost:5173/?v=a B=http://localhost:5173/?v=b \
+             --views desktop:1280x800,mobile:390x780 --json
+```
+
+It sets the viewport the page lays out against rather than asking for a window,
+because a window request below the platform minimum is silently widened and the
+page is then cropped — producing an image with the right dimensions and the
+wrong content. Every shot is checked against the width the page actually saw.
+
 Because the views are matched, **press `S` and the variants flip in the same
 frame**, pixel for pixel. Side by side is bad at showing a spacing change or a
 type swap. Flicker makes it obvious in a quarter of a second.
@@ -234,6 +247,7 @@ stet rule "<one line>"      record a correction straight into the canon
 stet rules [--tag design]   print the canon
 stet sync [--remove]        re-inject into agent surfaces, or restore them exactly
 
+stet capture A=<url> B=<url>  matched screenshots of every variant at every view
 stet schema                 the item format, as a worked example
 stet churn                  files this repo keeps having to redo
 stet claude [--project]     wire into Claude Code's hooks (see above)

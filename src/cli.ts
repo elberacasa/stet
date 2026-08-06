@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.9.0';
+const VERSION = '0.10.0';
 
 interface Args {
   cmd: string;
@@ -78,6 +78,8 @@ async function main(): Promise<void> {
       return schema();
     case 'init':
       return doInit();
+    case 'capture':
+      return doCapture();
     case 'version':
     case '--version':
       return out(VERSION);
@@ -234,6 +236,64 @@ function doInit(): void {
     out(`  ${dim('this directory now keeps its own canon; the one above no longer applies here.')}`);
   }
   out();
+}
+
+/**
+ * The matched-capture rig. Every variant at every view, same frame each time.
+ * Without this, capturing a pair by hand took a dozen browser calls and the
+ * mobile pair was abandoned — which is how this command came to exist.
+ */
+async function doCapture(): Promise<void> {
+  const { capture, DEFAULT_VIEWS, findBrowser, parseVariants, parseViews, plan, toVariants } = await import('./capture.js');
+  const variants = parseVariants(args.rest);
+  const views = args.flags.views ? parseViews(String(args.flags.views)) : DEFAULT_VIEWS;
+  const outDir = path.resolve(String(args.flags.out ?? 'captures'));
+  const shots = plan(variants, views, outDir);
+
+  const browser = findBrowser();
+  if (!browser) {
+    // Say exactly what could not be done and what would have been done, so an
+    // agent with its own browser tools can run the same rig by hand.
+    process.stderr.write('stet: no Chrome, Chromium, Edge or Brave found — set $CHROME_PATH to point at one.\n');
+    process.stderr.write('      the rig it would have run, so you can drive it yourself:\n\n');
+    for (const s of shots) {
+      process.stderr.write(`      ${String(s.view.width).padStart(5)}x${s.view.height}  ${s.url}\n` +
+        `            → ${path.relative(process.cwd(), s.file)}\n`);
+    }
+    process.exit(2);
+  }
+
+  if (!args.flags.json) {
+    out();
+    out(`  ${dim('capturing with')} ${path.basename(browser)}`);
+    out();
+  }
+  const results = await capture(shots, browser, { settleMs: Number(args.flags.settle) || undefined });
+
+  const failed = results.filter((r) => !r.ok);
+  if (!args.flags.json) {
+    for (const r of results) {
+      const size = r.bytes ? dim(`${(r.bytes / 1024).toFixed(0)}KB`) : warm('empty');
+      // A page laid out at a different width than asked for was cropped, not
+      // reflowed — the image would look right and be wrong.
+      const laid = r.laidOutAt === r.shot.view.width ? '' : warm(`  laid out at ${r.laidOutAt}px, not ${r.shot.view.width}`);
+      out(`  ${r.ok ? cool('✓') : warm('✗')} ${r.shot.label}-${r.shot.view.name.padEnd(8)} ${dim(`${r.shot.view.width}x${r.shot.view.height}`)}  ${size}${laid}${r.error ? warm(`  ${r.error}`) : ''}`);
+    }
+    out();
+    if (failed.length) {
+      out(`  ${warm(String(failed.length))} of ${results.length} produced nothing — is the page actually serving?`);
+      out();
+      process.exitCode = 1;
+      return;
+    }
+    out(`  ${dim('paste these into an item, or:')}  stet capture ${args.rest.join(' ')} --json`);
+    out();
+    return;
+  }
+
+  // Machine-readable: the variants array, ready to drop into item.json.
+  out(JSON.stringify({ variants: toVariants(shots, process.cwd()) }, null, 2));
+  if (failed.length) process.exitCode = 1;
 }
 
 /** Which files this repo keeps having to redo, across every recent session. */
@@ -507,6 +567,7 @@ function help(): void {
   ${cool('stet')}                        init, wire agent surfaces, serve, watch, notify
   ${cool('stet ask')} < item.json        queue a decision — this is how agents call it
   ${cool('stet init')}                   start a project here, even inside another one
+  ${cool('stet capture')} A=<url> B=<url>  matched screenshots of every variant at every view
   ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
