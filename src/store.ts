@@ -337,6 +337,24 @@ export function undecide(root: string, id: string): Item {
   return rest as Item;
 }
 
+/**
+ * Discards a pending decision, and everything queued with it.
+ *
+ * A decision that should not have been asked had no exit. `undo` walks a
+ * *decided* item back to the queue; there was nothing for one that never should
+ * have entered it — and a pending decision is not inert, it denies writes to
+ * every path it claims. So a badly-worded question left the work blocked with
+ * no way out except deleting a directory by hand, which is the answer that made
+ * `undo` necessary in the first place.
+ */
+export function drop(root: string, id: string): Item {
+  const dir = path.join(paths(root).pending, id);
+  const entry = readEntry(dir, 'pending');
+  if (!entry.ok) throw new Error(`${id} is not a pending decision: ${entry.error}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  return entry.item;
+}
+
 /** The most recently decided item, or null. */
 export function lastDecided(root: string): Item | null {
   const decided = listEntries(root, 'decided').filter((e) => e.ok);

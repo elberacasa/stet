@@ -7,7 +7,7 @@ import { addItem, blind, decide, describeProblem, init, listEntries, readEntry, 
 import { appendRule, appendDirectRule, bumpHits, estimateTokens, parseRules, readRules, renderBlock, reviseRule, ruleLine, selectRules, weakness } from '../src/rules.js';
 import { hasBlock, insert, remove, sync, unsync } from '../src/sync.js';
 import { PAGE } from '../src/page.js';
-import { runHook } from '../src/hooks.js';
+import { blockingDecisions, runHook } from '../src/hooks.js';
 import { problems } from '../src/validate.js';
 import { METHOD } from '../src/method.js';
 import { matchesAny } from '../src/glob.js';
@@ -1010,5 +1010,42 @@ describe('the blind test, defeated by its own content', () => {
       item('Which empty state?', ['Nothing here yet', 'Start your first project now']),
       item('Which palette?', ['Original Bauhaus red', 'Muted brick']),
     ]) expect(tell(it), JSON.stringify(it.variants[0])).toHaveLength(0);
+  });
+});
+
+// ── a question that should not have been asked ─────────────────────────────
+describe('discarding a pending decision', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  it('removes it, and lifts the block it was holding', () => {
+    // A pending decision is not inert: it denies writes to every path it
+    // claims. A badly-worded question left the work blocked with no way out
+    // but deleting a directory by hand — the answer that made `undo` exist.
+    run(['ask', 'Which accent?', 'apricot', 'celadon', '--globs', 'index.html']);
+    expect(blockingDecisions(root, 'index.html')).toHaveLength(1);
+
+    const r = run(['undo', 'which-accent']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/discarded/);
+    expect(r.stdout, 'say the block is gone — that is why they ran it').toMatch(/no longer denied/);
+    expect(fs.existsSync(path.join(root, '.stet/pending/which-accent'))).toBe(false);
+    expect(blockingDecisions(root, 'index.html')).toHaveLength(0);
+  });
+
+  it('earns no rule from a question nobody answered', () => {
+    run(['ask', 'Which one?', 'a thing', 'another thing']);
+    run(['undo', 'which-one']);
+    expect(readRules(root)).toEqual([]);
+  });
+
+  it('will not discard by defaulting to "the last one"', () => {
+    // Taking back a verdict is recoverable — it goes back in the queue.
+    // Deleting a queued question is not, so it needs the id spelled out.
+    run(['ask', 'Which spacing?', 'tight', 'loose']);
+    const r = run(['undo']);
+    expect(r.status).toBe(1);
+    expect(r.stderr, 'and it should say how to do the thing they meant').toMatch(/stet undo which-spacing/);
+    expect(fs.existsSync(path.join(root, '.stet/pending/which-spacing'))).toBe(true);
   });
 });

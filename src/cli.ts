@@ -10,7 +10,7 @@ import { appendDirectRule, DEFAULT_BUDGET, readRules, removeRule, renderBlock, r
 import { notify, open } from './notify.js';
 // server.ts pulls in the 39KB page document. The hook path runs on every tool
 // call, so it is imported lazily and only by the command that serves.
-import { addItem, findEntry, findRoot, init, lastDecided, listEntries, paths, undecide, validId } from './store.js';
+import { addItem, drop, findEntry, findRoot, init, lastDecided, listEntries, paths, undecide, validId } from './store.js';
 import { appendNote, readNotes, removeNote, thin } from './notes.js';
 import { commaList } from './text.js';
 import { assertItem } from './validate.js';
@@ -1202,8 +1202,20 @@ function printNotes(): void {
 }
 
 function undo(): void {
-  const id = args.rest[0] ?? lastDecided(root)?.id;
-  if (!id) throw new Error('nothing has been decided yet');
+  // Named `undo` rather than a second verb because it is one idea: take the
+  // decision back a step. Decided goes to pending; pending goes away. Dropping
+  // requires the id spelled out — deleting a queued question is not something
+  // to do by defaulting to "the last one".
+  const named = args.rest[0];
+  if (named && findEntry(root, named)?.state === 'pending') return dropPending(named);
+
+  const id = named ?? lastDecided(root)?.id;
+  if (!id) {
+    const waiting = listEntries(root, 'pending').filter((e) => e.ok);
+    throw new Error(waiting.length
+      ? `nothing has been decided yet. to discard a question instead: stet undo ${waiting[0].id}`
+      : 'nothing has been decided yet');
+  }
   const before = readRules(root);
   const item = undecide(root, String(id));
   const earned = before.filter((r) => r.from === id);
@@ -1230,6 +1242,15 @@ function editDirectRule(): void {
   out(`  ${warm(String(n))}  ${after.text}`);
   const weak = weakness(after.text);
   if (weak) out(`  ${warm('!')} ${dim(weak)}`);
+}
+
+/** A queued question that should not have been asked, and the block it holds. */
+function dropPending(id: string): void {
+  const item = drop(root, id);
+  out();
+  out(`  ${cool('discarded')} ${item.id} ${dim('— never decided, nothing earned from it')}`);
+  if (item.globs?.length) out(dim(`  writes into ${item.globs.join(', ')} are no longer denied`));
+  out();
 }
 
 function removeDirectRule(): void {
@@ -1284,6 +1305,7 @@ function help(): void {
   ${cool('stet status')} [--json]        what is waiting, and how big the canon is
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet undo')} [<id>]            take back the last verdict, and the rule it earned
+  ${dim('                            or, with a pending id: discard that question')}
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
   ${cool('stet rule edit')} <n> "<line>"  sharpen a rule's wording later

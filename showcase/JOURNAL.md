@@ -2024,6 +2024,48 @@ better one than the one we started with.
 
 ---
 
+## Finding 54 — a question that should not have been asked had no exit
+
+Immediately downstream of the last two findings, and only visible because
+somebody was standing in it.
+
+The focus-timer project had one pending decision: the accent colour, asked as
+three hex codes, announcing its own answer. Two things were true at once —
+it was not worth judging, and it claimed `index.html`, so **every further edit
+to the entire application was denied until it was ruled on**.
+
+There was no way out. `stet undo` walks a *decided* item back to the queue.
+Nothing walked a queued item out of it. The only exit was deleting a directory
+by hand, which is exactly the answer that made `undo` necessary two releases
+earlier — repeated, in the state where it costs more, because a pending
+decision is not inert. It holds a gate.
+
+`stet undo <id>` handles it now, as one idea rather than a second verb: take the
+decision back a step. Decided goes to pending; pending goes away.
+
+```
+$ stet undo the-accent-colour-i-picked-warm-apricot
+  discarded the-accent-colour-i-picked-warm-apricot — never decided, nothing earned from it
+  writes into index.html are no longer denied
+```
+
+Two deliberate details. It says the block is lifted, because that is why anybody
+would run it. And it refuses to discard by defaulting to "the last one" —
+taking back a verdict is recoverable, since the decision returns to the queue,
+but deleting a queued question is not, so it requires the id spelled out. Asking
+for the default prints the command that does what you meant:
+
+```
+$ stet undo
+stet: nothing has been decided yet. to discard a question instead:
+      stet undo the-accent-colour-i-picked-warm-apricot
+```
+
+Three findings from one real decision in one real project, and none of them were
+reachable from inside this repository.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -2076,6 +2118,7 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 54 | standing in the blocked project | a pending decision denies writes to every path it claims and had no way out — `undo` walked a decided item back, nothing walked a queued one away, so a bad question held a gate until you deleted a directory by hand |
 | 52 | **a stranger's project, first real decision** | the blind test was voided by the item's own content — variant A said "(current)" and the question said "I picked warm apricot", so the shuffle protected nothing |
 | 53 | the same decision | an accent colour asked as three hex codes: unjudgeable, in the one tool whose pitch is showing the real artifact |
 | 51 | setting up a fresh project | `stet claude` printed "stet is now a gate in this repo" while the gate would not run until the next session — Claude Code snapshots hooks at startup, and nothing in three successful commands said so |
@@ -2089,7 +2132,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-five reported success while broken.
+other forty-six reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README
