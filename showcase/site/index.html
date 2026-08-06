@@ -58,8 +58,12 @@ header.hero{position:relative;padding:78px 0 66px;overflow:hidden}
   border-radius:6px;padding:22px 24px;font-size:13px;line-height:1.72;color:var(--dim);
   white-space:pre-wrap;max-width:720px;overflow-x:auto;
   box-shadow:0 20px 50px rgba(0,0,0,.35)}
-.deny b{color:var(--warm);font-weight:400}
+.deny b{color:var(--fail);font-weight:400}
 .deny i{color:var(--ink);font-style:normal}
+.deny .g{color:var(--cool)}
+.deny .tool{color:var(--ink)}
+.deny .bullet{color:var(--cool)}
+.deny .res{color:var(--faint)}
 .hero h1{margin:30px 0 18px;max-width:19ch}
 .hero .body{margin-bottom:30px}
 .ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
@@ -140,6 +144,37 @@ footer{border-top:1px solid var(--line);padding:70px 0 64px;text-align:center}
 .flinks a{color:var(--dim)}
 .tiny{font-size:11px;color:var(--faint);margin-top:24px}
 
+/* ── the loop ─────────────────────────────────────────────────────────── */
+.loop{list-style:none;display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:48px}
+.loop li{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:18px 16px;margin-right:26px;display:flex;flex-direction:column;gap:7px}
+.loop li:last-child{margin-right:0}
+.loop li.last{border-color:var(--cool)}
+.loop .s{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--warm)}
+.loop li.last .s{color:var(--cool)}
+.loop b{font-weight:400;font-size:12.5px;color:var(--ink);line-height:1.5}
+.loop .d{font-size:11.5px;color:var(--faint);line-height:1.55}
+/* connector, drawn between cards rather than positioned by hand */
+.loop li:not(:last-child)::after{
+  content:'';position:absolute;top:50%;right:-26px;width:26px;height:1px;
+  background:repeating-linear-gradient(90deg,var(--line-2) 0 4px,transparent 4px 9px);
+}
+.loopback{position:relative;margin-top:26px;text-align:center}
+.loopback::before{
+  content:'';position:absolute;left:8%;right:8%;top:50%;height:1px;
+  background:repeating-linear-gradient(90deg,var(--cool) 0 3px,transparent 3px 8px);opacity:.45;
+}
+/* the label sits on the background so it masks the line instead of colliding */
+.loopback span{position:relative;background:var(--bg);padding:0 16px;
+  font-size:11.5px;color:var(--faint)}
+section.tint .loopback span{background:var(--bg-2)}
+@media(max-width:1000px){
+  .loop{grid-template-columns:repeat(2,1fr);gap:14px}
+  .loop li{margin-right:0}
+  .loop li:not(:last-child)::after{display:none}
+}
+@media(max-width:560px){.loop{grid-template-columns:1fr}}
+
 @keyframes dashflow{to{stroke-dashoffset:-20}}
 .flow{animation:dashflow 1.5s linear infinite}
 .flow-slow{animation:dashflow 3.4s linear infinite}
@@ -191,14 +226,15 @@ footer{border-top:1px solid var(--line);padding:70px 0 64px;text-align:center}
     <div class="f">design</div>
   </div>
 
-  <div class="deny"><b>stet: this path is governed by a decision the human has not made yet.</b>
+  <div class="deny"><span class="tool"><span class="bullet">⏺</span> Update(src/components/DeleteButton.tsx)</span>
+  <span class="res">⎿</span>  <b>Error: stet — this path is waiting on a decision you have not made.</b>
 
-  <i>api-shape</i> — "Which shape should the list endpoint return?"
-  claims: src/api/**
+     <i>delete-flow</i> — "Should deleting ask first, or just be undoable?"
+     claims: src/components/**
 
-Do not implement either option yet — whichever you pick has a 50% chance
-of being thrown away. Either work somewhere else, or block on the verdict with:
-  stet await api-shape</div>
+     Do not implement either option yet. Whichever I pick has a 50% chance
+     of being thrown away. I will work elsewhere, or block on your verdict:
+       <span class="g">stet await delete-flow</span></div>
 
   <h1>That is an agent<br>being stopped mid-write,<br>because <em>you had not decided.</em></h1>
 
@@ -393,54 +429,36 @@ of being thrown away. Either work somewhere else, or block on the verdict with:
   <div class="label">the loop</div>
   <h2>Ask once. <em>Let it stand.</em></h2>
 
-  <figure>
-    <svg viewBox="0 0 1060 210" role="img" aria-label="The loop: an agent asks, you judge blind, the reveal lands, a rule binds every future agent">
-      <g font-family="ui-monospace,monospace" font-size="11.5">
-        <!-- nodes -->
-        <g>
-          <rect x="0" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
-          <text x="16" y="86" fill="#e79a5e">1 · the agent asks</text>
-          <text x="16" y="106" fill="#8d8677">stet ask &lt; item.json</text>
-          <text x="16" y="122" fill="#5f5c52">then blocks, burning nothing</text>
-        </g>
-        <g>
-          <rect x="220" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
-          <text x="236" y="86" fill="#e79a5e">2 · you judge</text>
-          <text x="236" y="106" fill="#8d8677">side by side, or press S</text>
-          <text x="236" y="122" fill="#5f5c52">to flip them in one frame</text>
-        </g>
-        <g>
-          <rect x="440" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
-          <text x="456" y="86" fill="#e79a5e">3 · the reveal</text>
-          <text x="456" y="106" fill="#8d8677">what A and B really were</text>
-          <text x="456" y="122" fill="#5f5c52">now you can write the rule</text>
-        </g>
-        <g>
-          <rect x="660" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#2b2e38"/>
-          <text x="676" y="86" fill="#e79a5e">4 · it binds</text>
-          <text x="676" y="106" fill="#8d8677">AGENTS.md · CLAUDE.md</text>
-          <text x="676" y="122" fill="#5f5c52">.cursorrules · the gate</text>
-        </g>
-        <g>
-          <rect x="880" y="60" width="180" height="76" rx="7" fill="#1b1d24" stroke="#79c2b2"/>
-          <text x="896" y="86" fill="#79c2b2">5 · next week</text>
-          <text x="896" y="106" fill="#8d8677">a different agent obeys</text>
-          <text x="896" y="122" fill="#5f5c52">without asking you again</text>
-        </g>
-        <!-- connectors -->
-        <g stroke="#3a3e4a" stroke-width="1.5" stroke-dasharray="4 5" class="flow">
-          <line x1="182" y1="98" x2="218" y2="98"/>
-          <line x1="402" y1="98" x2="438" y2="98"/>
-          <line x1="622" y1="98" x2="658" y2="98"/>
-          <line x1="842" y1="98" x2="878" y2="98"/>
-        </g>
-        <!-- return arc -->
-        <path d="M970 140 C 970 190, 90 190, 90 140" fill="none" stroke="#79c2b2" stroke-width="1.5"
-              stroke-dasharray="3 5" class="flow-slow" opacity=".7"/>
-        <text x="530" y="184" fill="#5f5c52" text-anchor="middle">and the canon grows by one</text>
-      </g>
-    </svg>
-  </figure>
+  <!-- HTML, not SVG: SVG text cannot wrap, so every box overflowed its border
+       the moment a line ran long. Boxes that hold text should be boxes. -->
+  <ol class="loop">
+    <li>
+      <span class="s">1 · the agent asks</span>
+      <b>stet ask &lt; item.json</b>
+      <span class="d">then blocks on a file watch, burning nothing</span>
+    </li>
+    <li>
+      <span class="s">2 · you judge, blind</span>
+      <b>side by side — or press S</b>
+      <span class="d">flips both in the same frame, pixel for pixel</span>
+    </li>
+    <li>
+      <span class="s">3 · the reveal</span>
+      <b>what A and B really were</b>
+      <span class="d">the first moment a rule worth obeying can be written</span>
+    </li>
+    <li>
+      <span class="s">4 · it binds</span>
+      <b>AGENTS.md · CLAUDE.md · .cursorrules</b>
+      <span class="d">plus the hook that refuses the write</span>
+    </li>
+    <li class="last">
+      <span class="s">5 · next week</span>
+      <b>a different agent obeys it</b>
+      <span class="d">on a different machine, without asking you again</span>
+    </li>
+  </ol>
+  <div class="loopback"><span>and the canon grows by one</span></div>
 </div></section>
 
 <!-- ═══ NOT ═══ -->

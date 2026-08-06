@@ -236,6 +236,32 @@ a capture in which every single shot had already worked. It now waits for the
 process to actually exit, retries, and treats a stray temp directory as not
 worth failing over.
 
+### Finding 11 — SVG text cannot wrap, so every box overflowed
+
+The loop diagram was hand-positioned SVG: five `<rect>` boxes with `<text>`
+inside them at fixed coordinates. SVG text has no line box, so the moment a
+label ran longer than its rectangle it simply carried on past the border —
+"a different agent obeys" ran out of its own box, and the return-arc caption
+sat directly on top of the arc it was labelling.
+
+Rebuilt in HTML. Boxes that hold text should be boxes: a five-column grid
+wraps automatically, the connectors are `::after` pseudo-elements between
+cards rather than coordinates, and the caption sits on a background-coloured
+chip so it masks the line instead of colliding with it. Below 1000px it folds
+to two columns and drops the connectors.
+
+The general lesson, which cost this project twice: **use SVG for the shapes
+and HTML for the words.** The decay curve and the token bars stay SVG — they
+are geometry with short labels, which is what SVG text is for.
+
+### The hero example
+
+Swapped from an API-shape question to something anyone building an app has
+hit: *"Should deleting ask first, or just be undoable?"* — and rendered in
+Claude Code's actual tool-call format, `⏺ Update(...)` above `⎿ Error:`,
+rather than an invented one. The point of the hero is recognition, and a
+developer-only example asks the reader to translate before they can react.
+
 ---
 
 ## Running tally of bugs found by use, across the whole project
@@ -258,6 +284,7 @@ Not one of these was visible from reading the code.
 | 12 | capturing the landing page | mobile emulation shrink-to-fit made a 390px view lay out at 476px |
 | 13 | the same capture | the nav overflowed at 390px — caught by the tool the page advertises |
 | 14 | the same capture | profile cleanup raced Chrome's exit and failed a capture after every shot succeeded |
+| 15 | a screenshot of the page | SVG `<text>` cannot wrap, so every box in the loop diagram overflowed its own border |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported
