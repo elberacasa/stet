@@ -1,11 +1,13 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { addItem, blind, decide, describeProblem, init, listEntries, readEntry, revealText, shuffleLabels, assetPath } from '../src/store.js';
 import { appendRule, appendDirectRule, bumpHits, estimateTokens, parseRules, readRules, renderBlock, reviseRule, ruleLine, selectRules, weakness } from '../src/rules.js';
 import { hasBlock, insert, remove, sync, unsync } from '../src/sync.js';
 import { PAGE } from '../src/page.js';
+import { problems } from '../src/validate.js';
 import type { Item, Rule } from '../src/types.js';
 
 let root: string;
@@ -314,5 +316,142 @@ describe('the live preview', () => {
     expect(PAGE).toContain('.liveframe{');
     expect(PAGE).not.toMatch(/^\.live\{/m);
     expect(worn.has('liveframe') || PAGE.includes('class="liveframe"')).toBe(true);
+  });
+});
+
+// ── first contact ──────────────────────────────────────────────────────────
+// The first thing a person types is `--version` or `--help`. Both used to be
+// swallowed by the flag parser, fall through to the default command, write a
+// project into the current directory and hang on a web server. And the version
+// they would have printed was hardcoded a release behind the package — the
+// number `stet hook events` reports, which is what the skew check trusts.
+describe('first contact', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
+  const run = (args: string[], cwd: string) =>
+    spawnSync('node', [BIN, ...args], { cwd, encoding: 'utf8', timeout: 10_000 });
+
+  it('reports the version the package actually is', () => {
+    // One source of truth. A second copy drifts, and this one fed the check
+    // built to catch drift.
+    expect(run(['version'], root).stdout.trim()).toBe(pkg.version);
+    expect(run(['--version'], root).stdout.trim()).toBe(pkg.version);
+    expect(run(['-v'], root).stdout.trim()).toBe(pkg.version);
+  });
+
+  it('reports that same version to a wiring probing it', () => {
+    const probe = JSON.parse(run(['hook', 'events'], root).stdout) as { version: string };
+    expect(probe.version).toBe(pkg.version);
+  });
+
+  it('answers --version and --help without touching the filesystem', () => {
+    for (const form of [['--version'], ['--help'], ['-h'], ['help'], ['-v']]) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-first-'));
+      const r = run(form, dir);
+      expect(r.status, `${form.join(' ')} should exit 0`).toBe(0);
+      expect(r.signal, `${form.join(' ')} should not have to be killed`).toBe(null);
+      expect(fs.readdirSync(dir), `${form.join(' ')} wrote into the cwd`).toEqual([]);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── the item contract ──────────────────────────────────────────────────────
+// Items are authored by agents, so malformed input is the normal case. Each of
+// these either crashed with a TypeError naming an internal property, or queued
+// successfully and produced a decision screen the human could not act on.
+describe('the item contract', () => {
+  const good = (): unknown => ({
+    id: 'ok', question: 'Which?',
+    map: { A: 'serif', B: 'sans' },
+    variants: [
+      { label: 'A', blocks: [{ kind: 'text', text: 'one' }] },
+      { label: 'B', blocks: [{ kind: 'text', text: 'two' }] },
+    ],
+  });
+
+  it('accepts a well-formed item', () => {
+    expect(problems(good())).toEqual([]);
+  });
+
+  it('allows a single variant, which is the accept/reject gate', () => {
+    // Documented behaviour: one variant asks "good enough to ship?". A rule
+    // requiring two would have quietly removed a supported mode.
+    const one = good() as { variants: unknown[]; map: Record<string, string> };
+    one.variants = [one.variants[0]];
+    delete one.map.B;
+    expect(problems(one)).toEqual([]);
+  });
+
+  it('refuses an item with nothing to rule on', () => {
+    const none = good() as { variants: unknown[] };
+    none.variants = [];
+    expect(problems(none).join(' ')).toMatch(/is empty/);
+  });
+
+  it('refuses an item with no question', () => {
+    const q = good() as Record<string, unknown>;
+    delete q.question;
+    expect(problems(q).join(' ')).toMatch(/"question" is required/);
+  });
+
+  it('refuses a missing map instead of throwing on undefined', () => {
+    const m = good() as Record<string, unknown>;
+    delete m.map;
+    // It used to be: Cannot read properties of undefined (reading 'A')
+    expect(problems(m).join(' ')).toMatch(/"map" is required/);
+  });
+
+  it('names a label the map does not cover', () => {
+    const m = good() as { map: Record<string, string> };
+    delete m.map.B;
+    expect(problems(m).join(' ')).toMatch(/no entry for variant "B"/);
+  });
+
+  it('refuses a block of a kind nothing renders', () => {
+    const b = good() as { variants: { blocks: unknown[] }[] };
+    b.variants[0].blocks = [{ kind: 'video', src: 'v.mp4' }];
+    expect(problems(b).join(' ')).toMatch(/is not one of: code, diff, text, image, audio, url/);
+  });
+
+  it('refuses a block missing the field its kind needs', () => {
+    const b = good() as { variants: { blocks: unknown[] }[] };
+    b.variants[0].blocks = [{ kind: 'image' }];
+    expect(problems(b).join(' ')).toMatch(/needs a non-empty "src"/);
+  });
+
+  it('reports every problem at once, not one per attempt', () => {
+    expect(problems({}).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('refuses to write anything when the item is bad', () => {
+    expect(() => addItem(root, { id: 'bad' } as never)).toThrow(/cannot be queued/);
+    expect(fs.existsSync(path.join(root, '.stet/pending/bad'))).toBe(false);
+  });
+});
+
+// ── flags ──────────────────────────────────────────────────────────────────
+describe('flags a command does not read', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  it('scopes a direct rule, which --globs silently dropped', () => {
+    // The flag parsed, nothing read it, and the rule became repo-wide while
+    // reporting success — so the fastest way to record a rule was also the
+    // only way that could not scope it.
+    expect(run(['rule', 'buttons say what happens', '--globs', 'src/web/**']).status).toBe(0);
+    const rule = readRules(root)[0];
+    expect(rule.globs).toEqual(['src/web/**']);
+  });
+
+  it('refuses a flag it does not read, and suggests the real one', () => {
+    const r = run(['rule', 'x', '--glob', 'src/**']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/does not take --glob/);
+    expect(r.stderr).toMatch(/did you mean --globs\?/);
+  });
+
+  it('still accepts the flags it does read', () => {
+    expect(run(['rules', '--tag', 'design']).status).toBe(0);
   });
 });

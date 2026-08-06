@@ -10,10 +10,24 @@ import { notify, open } from './notify.js';
 // server.ts pulls in the 39KB page document. The hook path runs on every tool
 // call, so it is imported lazily and only by the command that serves.
 import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from './store.js';
+import { assertItem } from './validate.js';
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.15.0';
+// Read from package.json rather than kept alongside it. A hardcoded copy had
+// already drifted a release behind by the time anyone looked, and the number it
+// feeds is the one `stet hook events` reports — so the check that exists to
+// catch version skew was itself reporting the wrong version. One source only.
+// Lazy, because the hook path runs on every tool call and never asks for it.
+let cachedVersion: string | null = null;
+function VERSION(): string {
+  if (cachedVersion === null) {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const pkg = JSON.parse(fs.readFileSync(path.join(here, '..', 'package.json'), 'utf8')) as { version?: string };
+    cachedVersion = String(pkg.version ?? '0.0.0');
+  }
+  return cachedVersion;
+}
 
 interface Args {
   cmd: string;
@@ -37,6 +51,63 @@ function parse(argv: string[]): Args {
 }
 
 const args = parse(process.argv.slice(2));
+// `--version` and `--help` start with `--`, so parse() files them as flags and
+// the command comes out empty — which is the default command, which initialises
+// a project and starts a server. The two things a person types first wrote
+// AGENTS.md into whatever directory they were standing in and then hung. Anyone
+// typing them means the command, so say so before anything reads args.cmd.
+if (args.cmd === '') {
+  // Consumed, not just read: it is the command now, and leaving it in flags
+  // makes the unknown-flag guard below reject `stet --version` for taking a
+  // flag that `stet version` does not accept.
+  if (args.flags.version) { args.cmd = 'version'; delete args.flags.version; }
+  else if (args.flags.help) { args.cmd = 'help'; delete args.flags.help; }
+}
+
+// Every flag each command actually reads. A flag nobody reads used to be
+// accepted and dropped: `stet rule "…" --globs src/web/**` scoped nothing and
+// still printed success, so the rule silently became repo-wide. A typo in a
+// flag name is the same failure. Refuse instead, and name the alternatives —
+// a misspelled flag is a person who knows what they want.
+const FLAGS: Record<string, string[]> = {
+  '': ['port', 'no-open', 'budget'],
+  ask: ['shuffle', 'help'],
+  await: ['timeout'],
+  rules: ['tag', 'budget'],
+  sync: ['remove', 'budget'],
+  rule: ['tag', 'globs'],
+  hook: ['budget'],
+  claude: ['project', 'remove', 'command'],
+  churn: ['threshold'],
+  capture: ['views', 'out', 'json', 'settle'],
+  init: [],
+  schema: [],
+  version: [],
+  help: [],
+};
+
+function checkFlags(): void {
+  const known = FLAGS[args.cmd];
+  if (!known) return; // unknown command — that path reports its own error
+  const unknown = Object.keys(args.flags).filter((f) => !known.includes(f));
+  if (!unknown.length) return;
+  const near = (f: string): string => {
+    // Cheap and good enough for a typo: the known flag sharing the most
+    // leading characters, if it shares more than one.
+    let best = '';
+    for (const k of known) {
+      let i = 0;
+      while (i < f.length && i < k.length && f[i] === k[i]) i++;
+      if (i > 1 && i > best.length) best = k;
+    }
+    return best ? ` — did you mean --${best}?` : '';
+  };
+  const list = unknown.map((f) => `--${f}${near(f)}`).join(', ');
+  throw new Error(
+    `${args.cmd || 'stet'} does not take ${list}\n` +
+      `       it takes: ${known.length ? known.map((f) => `--${f}`).join(', ') : 'no flags'}`,
+  );
+}
 const root = findRoot();
 const budget = Number(args.flags.budget ?? DEFAULT_BUDGET) || DEFAULT_BUDGET;
 
@@ -55,6 +126,7 @@ try {
 }
 
 async function main(): Promise<void> {
+  checkFlags();
   switch (args.cmd) {
     case '':
       return run();
@@ -81,16 +153,15 @@ async function main(): Promise<void> {
     case 'capture':
       return doCapture();
     case 'version':
-    case '--version':
-      return out(VERSION);
+    case '-v':
+      return out(VERSION());
     case 'help':
-    case '--help':
     case '-h':
       return help();
     default:
       // Printing help for an unknown command reads as success. It is how an
       // older global install silently ignores a command it has never heard of.
-      process.stderr.write(`stet: unknown command "${args.cmd}" (this is stet ${VERSION})\n`);
+      process.stderr.write(`stet: unknown command "${args.cmd}" (this is stet ${VERSION()})\n`);
       help();
       return process.exit(1);
   }
@@ -111,7 +182,7 @@ async function hook(): Promise<void> {
   // It reads no stdin, so it cannot block.
   if (event === 'events') {
     const { EVENTS } = await import('./hooks.js');
-    out(JSON.stringify({ version: VERSION, events: EVENTS }));
+    out(JSON.stringify({ version: VERSION(), events: EVENTS }));
     return;
   }
   let input: import('./hooks.js').HookInput = {};
@@ -180,12 +251,32 @@ async function claude(): Promise<void> {
   // exist — which is worse than not installing it. Resolve it now, and pin an
   // absolute path if `stet` is not on PATH.
   let command = args.flags.command ? String(args.flags.command) : '';
+  // The binary you are. Always implements what this build implements, because
+  // it is this build.
+  const self = `${process.execPath} ${fileURLToPath(new URL('../bin/stet.js', import.meta.url))}`;
+  const need = WIRING.map((w) => w.arg);
+  let pinned = '';
+
   if (!command) {
     const onPath = await resolves('stet');
-    command = onPath ? 'stet' : `${process.execPath} ${fileURLToPath(new URL('../bin/stet.js', import.meta.url))}`;
-    if (!onPath) {
-      process.stderr.write(`stet: not on PATH, so the hook is pinned to this checkout.\n` +
-        `      after \`npm i -g stetmark\`, re-run \`stet claude\` to use the short form.\n`);
+    command = onPath ? 'stet' : self;
+    if (!onPath) pinned = 'stet is not on PATH';
+    else if (scope === 'local') {
+      // `stet` on PATH is not necessarily this stet. It is routinely an older
+      // global install, and hooks wired to it fire, return nothing and gate
+      // nothing — the repo claims a protection it is not providing. This was
+      // the first bug this project ever found and it came back four times.
+      // Detecting it and writing the broken wiring anyway is not a fix, and
+      // "npm i -g stetmark@latest" is the wrong advice for someone who
+      // installed locally on purpose. Pin the binary that works.
+      const probe = await askEvents(`${command} hook events`);
+      const missing = probe.ok ? need.filter((e) => !probe.events.includes(e)) : need;
+      if (missing.length) {
+        command = self;
+        pinned = probe.ok
+          ? `the stet on PATH is ${probe.version}, which does not implement ${missing.join(', ')}`
+          : 'the stet on PATH is too old to say what it supports';
+      }
     }
   }
   const r = install(root, scope, command);
@@ -196,10 +287,16 @@ async function claude(): Promise<void> {
   out();
   out(`  ${dim('written to')} ${path.relative(root, r.file) || r.file}`);
 
+  if (pinned) {
+    out();
+    out(`  ${dim(`${pinned}, so these hooks call this build directly`)}`);
+    out(`  ${dim('after `npm i -g stetmark@latest`, re-run `stet claude` for the short form')}`);
+  }
+
   // Wiring is written by whichever stet you ran; the hooks call whichever stet
-  // is on PATH. Those are not always the same build.
+  // the command resolves to. Those are not always the same build — so ask the
+  // one that was actually written, after it was written.
   const probe = await askEvents(`${command} hook events`);
-  const need = WIRING.map((w) => w.arg);
   const missing = probe.ok ? need.filter((e) => !probe.events.includes(e)) : need;
   if (missing.length) {
     out();
@@ -388,7 +485,9 @@ async function ask(): Promise<void> {
   } catch (err) {
     throw new Error(`that is not valid JSON — ${(err as Error).message}`);
   }
-  if (!validId((item as { id?: unknown }).id)) throw new Error('the item needs an "id" of letters, digits, . _ or -');
+  // Report every problem at once. Checking the id alone meant an agent with
+  // five things wrong learned about them one command at a time.
+  assertItem(item);
   warnUnmatchedGlobs(item);
   const dir = addItem(root, item, { shuffle: args.flags.shuffle !== 'false' });
   const rel = path.relative(process.cwd(), dir) || dir;
@@ -563,18 +662,26 @@ function doSync(): void {
 
 function directRule(): void {
   const text = args.rest.join(' ').trim();
-  if (!text) throw new Error('usage: stet rule "never centre the hero" [--tag design]');
+  if (!text) throw new Error('usage: stet rule "never centre the hero" [--globs src/web/**] [--tag design]');
   init(root);
-  const tags = typeof args.flags.tag === 'string' ? args.flags.tag.split(',').map((s) => s.trim()) : [];
-  const rule = appendDirectRule(root, text, { tags });
+  const list = (v: unknown): string[] =>
+    typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const tags = list(args.flags.tag);
+  // A rule with globs is the one that arrives at the moment of the edit rather
+  // than sitting in AGENTS.md hoping to be remembered. The canon has always
+  // stored them and the gate has always used them; this was simply the one path
+  // that could not set them, so the fastest way to record a rule was also the
+  // only way that could not scope it.
+  const globs = list(args.flags.globs);
+  const rule = appendDirectRule(root, text, { tags, globs });
   sync(root, readRules(root), { budget });
   out(`  ${warm(String(rule.n))}  ${rule.text}`);
-  out(dim('  in every agent surface in this repo'));
+  out(dim(globs.length ? `  arrives when an agent touches ${globs.join(', ')}` : '  in every agent surface in this repo'));
 }
 
 function help(): void {
   out(`
-  ${warm('stet')} ${dim('— let it stand.')}  ${dim(VERSION)}
+  ${warm('stet')} ${dim('— let it stand.')}  ${dim(VERSION())}
 
   Your agents ask once. Your answer stands.
 
@@ -585,6 +692,7 @@ function help(): void {
   ${cool('stet schema')}                 the item format, as a worked example
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
+  ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
   ${cool('stet rules')} [--tag design]   print the canon
   ${cool('stet sync')} [--remove]        re-inject rules into agent surfaces, or restore them
 

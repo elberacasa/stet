@@ -538,6 +538,167 @@ app. Nothing but pointing it at a real dev server would have found that.
 
 ---
 
+## Installing it the way a stranger would
+
+Every check up to here ran against the working tree. Nobody installs a working
+tree. So: `npm i stetmark@0.16.0` — the version published an hour earlier —
+into a directory that had never seen stet, and then the first ten minutes of a
+new user, in order.
+
+It got three commands in.
+
+### Finding 18 — the published 0.16.0 called itself 0.15.0
+
+```
+$ stet version
+0.15.0
+```
+
+`VERSION` was a string literal in `src/cli.ts`, kept next to `package.json`
+rather than read from it, and it had been left behind at the last bump.
+
+That is an ordinary mistake with an unusual consequence here, because of what
+that constant feeds. `stet hook events` reports it, and `stet claude status`
+uses that report to decide whether the binary your hooks call is too old — the
+check built specifically for **finding 1**, the bug that has come back four
+times in this project. The safety net for version skew was itself reporting the
+wrong version.
+
+Now read from `package.json`, lazily, so the hook path never pays for it. One
+source of truth, and a test at the release gate that compares them.
+
+### Finding 19 — `--version` and `--help` created a project and hung
+
+Both had `case` branches. Neither branch was reachable.
+
+`parse()` sweeps anything starting with `--` into `flags`, so by the time the
+switch runs, `args.cmd` is `''` — and `''` is the default command, which
+initialises a project, writes `AGENTS.md`, and starts a web server that does
+not exit. Typing `stet --help` in your home directory created `~/.stet/` and
+`~/AGENTS.md` and then sat there.
+
+The two things a person types first, before they have read anything.
+
+They are consumed as commands now, before anything reads `args.cmd`.
+
+### Finding 20 — every command silently ignored flags it did not read
+
+`stet rule "buttons say what happens" --globs 'src/components/**'` printed:
+
+```
+  1  buttons say what happens
+  in every agent surface in this repo
+```
+
+Nothing read `--globs`. The rule was written repo-wide, the scoping was
+dropped, and the output reported success. Worse than the dropped flag was what
+it meant: a **scoped** rule is the one delivered at the moment of a matching
+write. An unscoped one lives in AGENTS.md. So the fastest way to record a rule
+was also the only way that could not use the mechanism this whole tool is
+about — and it did not say so.
+
+`appendDirectRule` had accepted `globs` all along. The CLI just never passed
+them.
+
+The general form of the bug is worth more than the specific one: an unknown
+flag was accepted and dropped everywhere, so every typo — `--glob`, `--view`,
+`--tags` — silently changed what the command did. Each command now declares
+what it reads, and anything else is refused by name:
+
+```
+$ stet rule x --glob 'src/**'
+stet: rule does not take --glob — did you mean --globs?
+       it takes: --tag, --globs
+```
+
+Which immediately caught a bug in the fix itself: normalising `--version` into
+the `version` command left `version` sitting in `flags`, so the guard rejected
+`stet --version` for passing a flag that `stet version` does not accept. The
+test written for finding 19 failed on the fix for finding 20, before either
+shipped.
+
+### Finding 21 — the wiring detected the broken gate and wrote it anyway
+
+`stet claude` wires the command `stet`, if `stet` is on PATH. On this machine
+that resolves to an older global install, and `stet claude status` said so,
+correctly:
+
+```
+! the stet these hooks call is too old to say what it supports.
+  it fires, returns nothing, and gates nothing. fix: npm i -g stetmark@latest
+```
+
+The diagnostic was right. The behaviour around it was not. It detected that the
+gate it had just installed does nothing, wrote it anyway, and told the user to
+go install something globally — which is the wrong advice for someone who
+installed locally on purpose, and leaves the repo claiming a protection it is
+not providing until they act on it.
+
+For local wiring it now probes first and pins the binary you actually ran when
+the one on PATH cannot do the job. Same command, different outcome:
+
+```
+verified against stet 0.17.0 — all 5 events implemented
+```
+
+The four recurrences of finding 1 were all the same shape: *detect the skew,
+report it, proceed anyway.* This is the first fix that removes the skew instead
+of describing it.
+
+### Finding 22 — the agent-facing contract had no contract
+
+Items are authored by agents. Malformed input is the normal case. It was
+unvalidated:
+
+| what an agent sent | what happened |
+|---|---|
+| no `map` | `Cannot read properties of undefined (reading 'A')` |
+| no `variants` | `Cannot read properties of undefined (reading 'map')` |
+| no `question` | **queued successfully** — a decision screen with no question |
+| `{"kind":"video"}` | **queued successfully** — a variant that renders as nothing |
+
+The crashes are bad. The silent acceptances are worse: they produce a decision
+the human is asked to make and cannot, with every signal green.
+
+There is now a validator that reports every problem at once — an agent with
+five things wrong should learn about five, not discover them one command at a
+time — phrased for whatever wrote the item:
+
+```
+$ echo '{}' | stet ask
+stet: this item cannot be queued:
+       · "id" is required — a short slug like "hero-type"; it becomes the directory name
+       · "question" is required — the one line the human reads before choosing
+       · "variants" is required — an array of what the human is choosing between
+       run `stet schema` for a worked example
+```
+
+### The mistake I nearly shipped inside the fix
+
+My first version required at least two variants, on the reasoning that a
+decision with one option is not a decision.
+
+The README documents a single-variant item as a supported mode: the "good
+enough to ship?" gate, where the verdict is accept or reject rather than A or
+B. I would have deleted a documented feature while adding a check meant to
+protect the contract — and every test would have passed, because I would have
+written the tests to match my assumption.
+
+Reading the documentation caught it, not running the code. Zero is now the only
+rejected count, and there is a test asserting the accept/reject gate survives.
+
+### What the release gate tests now
+
+Everything above was invisible to 94 passing tests and three stress suites,
+because all of them ran against the source tree. The suite that would have
+caught all five is the one that did: pack the tarball, install it somewhere
+that has never seen stet, and walk the whole first-run path — first command,
+init, wire, gate an edit, queue a decision, block an agent, decide, release it.
+
+It is `test/stress-newuser.mjs`, and it runs before every publish.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -566,12 +727,23 @@ Not one of these was visible from reading the code.
 | 20 | a real dev server | `loading="lazy"` on an iframe in a collapsed box: 0×0 never enters the viewport, so it never loads — both previews were blank |
 | 21 | the same dev server | the sandbox gave every embedded app an opaque origin: `localStorage` threw and `fetch` failed in anything real |
 | 22 | a screenshot of that page | `.live` styled both the frame and the connection indicator; a `min-height` grew the status dot into a 480×300 box over the header |
+| 23 | installing from npm | the published 0.16.0 identified itself as 0.15.0 — and that constant is what the version-skew check reports, so the safety net lied |
+| 24 | typing `--help` | `--version` and `--help` were unreachable cases; both fell through to the default command, wrote a project into the current directory, and hung |
+| 25 | scoping a rule | `--globs` was parsed, read by nothing, and dropped while printing success — and every command silently ignored every unknown flag |
+| 26 | wiring a fresh project | the wiring detected that the gate it had just installed does nothing, and wrote it anyway |
+| 27 | malformed agent input | missing `map` or `variants` crashed with an internal TypeError; a missing question or an unknown block kind queued successfully and rendered a decision nobody could act on |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Eighteen of the twenty-two
-reported success while broken. Only four ever announced themselves — 5, 6, 7
-and 14 — and all four are the boring kind: a hang or a non-zero exit. Every
-finding that mattered arrived wearing green.
+invisible from the code and obvious from the use.** Six of the twenty-seven
+announced themselves — 5, 6, 7, 14, 24 and 26 — and they are the boring kind: a
+hang, a non-zero exit, a warning printed before proceeding anyway. The other
+twenty-one reported success while broken.
+
+Findings 23 to 27 all came from one decision: install the published package
+instead of testing the source tree. Ninety-four passing tests and three stress
+suites could not see any of them, because every one of those ran against `src/`.
+The distance between *the code works* and *the thing I published works* was five
+bugs wide, and the first three commands a stranger types crossed it.
 
 Finding 10 is the one worth dwelling on, because it was not found by a test or a
 crash — it was found by looking at what two real verdicts actually produced. The

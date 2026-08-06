@@ -210,7 +210,10 @@ times before it was made to check itself.
 - **Accept / reject one artifact** — an item with a single variant is a
   "good enough to ship?" gate.
 - **A correction, typed straight in** — `stet rule "never centre the hero"`,
-  for when you've already corrected an agent twice.
+  for when you've already corrected an agent twice. Add
+  `--globs src/web/**` and it becomes a scoped rule: delivered as a system
+  reminder at the moment an agent writes a matching file, rather than sitting
+  in AGENTS.md hoping to be remembered.
 
 All three land in `.stet/RULES.md`, which is the actual product: your
 accumulated taste, in plain text, portable, and enforceable by any agent.
