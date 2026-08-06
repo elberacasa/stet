@@ -307,6 +307,36 @@ async function claude(): Promise<void> {
         out(`  ${cool('verified')} ${dim(`against stet ${probe.version} — all ${events.length} events implemented`)}`);
       }
     }
+
+    // The third check, and the only empirical one. The two above are
+    // declarations: a settings file says the hook is wired, and our own binary
+    // says it implements the argument. Neither can tell you Claude Code is
+    // calling any of it — `PostCompact` satisfied both for the life of the
+    // project while never firing once.
+    const { lastFired } = await import('./hooks.js');
+    const fired = lastFired(root);
+    const now = Date.now();
+    out();
+    let anyFired = false;
+    let healthy = true;
+    for (const cmd of new Set(wiredCommands(file).map((w) => w.command))) {
+      const p2 = await askEvents(cmd);
+      if (!p2.ok || WIRING.some((w) => !p2.events.includes(w.arg))) healthy = false;
+    }
+    for (const w of WIRING) {
+      const at = fired[w.arg];
+      if (at) anyFired = true;
+      out(`    ${dim(w.event.padEnd(17))} ${at ? cool(ago(now - at)) : warm('never called')}`);
+    }
+    if (!anyFired) {
+      out();
+      // Do not say "verified" when the probe above said otherwise: two
+      // contradictory lines in one report teach people to read neither.
+      out(healthy
+        ? `  ${warm('!')} wired and verified, but Claude Code has never called any of it.`
+        : `  ${warm('!')} Claude Code has never called any of it either.`);
+      out(`    ${dim('hooks are loaded when a session starts — restart Claude Code, then check again.')}`);
+    }
     return;
   }
 
@@ -975,6 +1005,16 @@ function doSync(): void {
  * is the wrong shape for a person mid-session in a terminal, for a slash
  * command, or for anything that wants to render the state somewhere else.
  */
+/** Rough and readable; the question is "recently or not", never the exact second. */
+function ago(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  if (m < 1) return 'seconds ago';
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+
 function status(): void {
   const pending = listEntries(root, 'pending');
   const rules = readRules(root);

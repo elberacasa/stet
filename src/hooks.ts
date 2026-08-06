@@ -151,6 +151,52 @@ function remember(root: string, id: string | undefined, ns: number[]): void {
   for (const n of ns) append(root, id, { t: 'i', n });
 }
 
+/**
+ * Record that Claude Code actually called us.
+ *
+ * `stet claude status` could say two things: the wiring is present, and the
+ * binary it points at implements the event. Both are declarations — one read
+ * from a settings file, one asked of our own code. Neither can tell you whether
+ * Claude Code is calling any of it, which is the only question that matters and
+ * the one nobody could answer. `PostCompact` passed both checks for the life of
+ * the project while never firing once.
+ *
+ * An empty file per event, truncated on each call. No parsing, no growth, and
+ * concurrent writers cannot corrupt it because there is nothing in it — the
+ * mtime is the whole payload. Kept as a dotfile inside sessions/, which is
+ * already git-ignored in every project stet has ever initialised.
+ */
+function markFired(root: string, event: string): void {
+  try {
+    const dir = path.join(paths(root).stet, 'sessions');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `.fired-${event.replace(/[^a-z-]/g, '')}`), '');
+  } catch {
+    /* a hook must never be the reason a tool call fails */
+  }
+}
+
+/** When each event was last seen, by event argument. Absent means never. */
+export function lastFired(root: string): Record<string, number> {
+  const dir = path.join(paths(root).stet, 'sessions');
+  const out: Record<string, number> = {};
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return out;
+  }
+  for (const n of names) {
+    if (!n.startsWith('.fired-')) continue;
+    try {
+      out[n.slice(7)] = fs.statSync(path.join(dir, n)).mtimeMs;
+    } catch {
+      /* raced with a sweep */
+    }
+  }
+  return out;
+}
+
 /** Sessions are cheap files; drop the ones older than a day when we pass by. */
 export function sweepSessions(root: string, maxAgeMs = 86_400_000): void {
   const dir = path.join(paths(root).stet, 'sessions');
@@ -162,6 +208,9 @@ export function sweepSessions(root: string, maxAgeMs = 86_400_000): void {
   }
   const now = Date.now();
   for (const n of names) {
+    // The fired-markers are evidence about the wiring, not session state, and
+    // a stale one is the finding rather than litter to clear away.
+    if (n.startsWith('.')) continue;
     const f = path.join(dir, n);
     try {
       if (now - fs.statSync(f).mtimeMs > maxAgeMs) fs.rmSync(f);
@@ -387,6 +436,7 @@ export const EVENTS = ['pre-tool-use', 'post-tool-use', 'stop', 'session-start',
 /** Dispatch. Never throws: a broken hook must not break the session. */
 export function runHook(root: string, event: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
   try {
+    markFired(root, event);
     switch (event) {
       case 'pre-tool-use':
         return preToolUse(root, input, budget);

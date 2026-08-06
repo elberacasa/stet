@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expand, matches, matchesAny } from '../src/glob.js';
-import { canonOnce, churn, EVENTS, loadSession, postToolUse, preCompact, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
+import { canonOnce, churn, EVENTS, lastFired, loadSession, postToolUse, preCompact, preToolUse, runHook, stop, sweepSessions, targetPath } from '../src/hooks.js';
 import { CLAUDE_EVENTS, install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
 import { addItem, init } from '../src/store.js';
 import { appendDirectRule, readRules } from '../src/rules.js';
@@ -598,5 +598,53 @@ describe('notes', () => {
     ]) {
       expect(thin(good), good).toBeNull();
     }
+  });
+});
+
+// ── did Claude Code actually call any of this? ─────────────────────────────
+describe('observed firing', () => {
+  it('records that an event was really called', () => {
+    // The two checks that existed were declarations: a settings file says the
+    // hook is wired, and our own binary says it implements the argument.
+    // `PostCompact` satisfied both for the life of the project and never fired.
+    expect(lastFired(root)).toEqual({});
+    runHook(root, 'session-start', { session_id: 'f1', cwd: root });
+    runHook(root, 'pre-tool-use', {
+      session_id: 'f1', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'x.ts'), old_string: 'a', new_string: 'b' },
+    });
+    const fired = lastFired(root);
+    expect(Object.keys(fired).sort()).toEqual(['pre-tool-use', 'session-start']);
+    expect(fired['session-start']).toBeGreaterThan(0);
+    expect(fired['pre-compact'], 'an event nothing called must stay absent').toBeUndefined();
+  });
+
+  it('records the call even when the hook has nothing to say', () => {
+    // Most invocations return null. If only the ones that spoke were recorded,
+    // a correctly wired but quiet hook would read as never called.
+    runHook(root, 'stop', { session_id: 'f2', cwd: root });
+    expect(lastFired(root)['stop']).toBeGreaterThan(0);
+  });
+
+  it('survives the sweep that clears old session state', () => {
+    // The markers are evidence about the wiring, not session state. A stale one
+    // is the finding — "nothing has called this in a week" — not litter.
+    runHook(root, 'stop', { session_id: 'f3', cwd: root });
+    const marker = path.join(root, '.stet', 'sessions', '.fired-stop');
+    fs.utimesSync(marker, new Date(Date.now() - 9e8), new Date(Date.now() - 9e8));
+    sweepSessions(root);
+    expect(fs.existsSync(marker)).toBe(true);
+  });
+
+  it('costs effectively nothing on the path that runs per tool call', () => {
+    const t0 = process.hrtime.bigint();
+    for (let i = 0; i < 200; i++) {
+      runHook(root, 'pre-tool-use', {
+        session_id: 'perf', cwd: root, tool_name: 'Edit',
+        tool_input: { file_path: path.join(root, 'x.ts'), old_string: 'a', new_string: 'b' },
+      });
+    }
+    const perCall = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
+    expect(perCall, `${perCall.toFixed(2)}ms per in-process hook call`).toBeLessThan(5);
   });
 });

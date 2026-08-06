@@ -180,6 +180,28 @@ which is the exact thing this exists to replace.
 stet claude          # wire it in     ·  stet claude remove  ·  stet claude status
 ```
 
+`stet claude status` answers three questions, and the third is the one that
+matters:
+
+```
+wired — .claude/settings.local.json
+verified against stet 0.25.0 — all 6 events implemented
+
+  PreToolUse        seconds ago
+  PostToolUse       never called
+  Stop              never called
+  SessionStart      seconds ago
+  PreCompact        never called
+  UserPromptSubmit  never called
+```
+
+*Wired* is read from a settings file. *Verified* is asked of the binary those
+hooks point at. Both are declarations. **Has Claude Code ever actually called
+it** is the only empirical one — and stet wired a hook to a non-existent event
+called `PostCompact` for its entire life, which satisfied the first two checks
+and never fired once. If nothing has been called, hooks load at session start:
+restart Claude Code.
+
 That wires six hooks for the agent, and two slash commands for you — so the
 loop is driven from inside the session it interrupts:
 

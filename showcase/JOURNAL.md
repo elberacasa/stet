@@ -1493,6 +1493,81 @@ depend on that next time.
 
 ---
 
+## The check that was never possible to fail
+
+After shipping notes I turned the method on stet itself: what has never actually
+been verified? Everything in this log was tested through synthetic hook
+payloads, fed to the binary by hand. Nothing had ever confirmed that **Claude
+Code calls any of it.**
+
+The investigation started by accident. `.claude/` in stet's own repo was empty
+and `stet claude status` said *not wired* — yet `.stet/sessions/` held a journal
+named with this session's id. So hooks had fired here, at some point, and then
+the wiring was removed.
+
+Working that out required listing a git-ignored directory by hand and reading
+raw JSONL. That is the whole finding: **there was no way to ask.**
+
+### What `stet claude status` could and could not say
+
+```
+wired — .claude/settings.local.json          ← read from a settings file
+verified against stet 0.24.0 — all 6 events  ← asked of our own binary
+```
+
+Both are declarations. One reads a file that says a hook exists. The other asks
+our own code whether it implements an argument our own code named. Neither can
+observe Claude Code doing anything, and `PostCompact` — finding 43 — satisfied
+both of them for the entire life of the project while never being called once.
+
+There is now a third line, and it is the only empirical one:
+
+```
+  PreToolUse        seconds ago
+  PostToolUse       never called
+  Stop              never called
+  SessionStart      seconds ago
+  PreCompact        never called
+  UserPromptSubmit  never called
+```
+
+An empty file per event, truncated on each call, with the mtime as the entire
+payload. No parsing, no growth, and concurrent writers cannot corrupt a file
+with nothing in it — which matters, because this runs on the path that fires on
+every tool call in every parallel agent. Measured at **0.01ms per call**; the
+hook total is 57ms median, which is process startup and unchanged.
+
+Three details that were decided rather than defaulted:
+
+**The marker is written before dispatch, not after.** Most hook invocations
+return `null` — a `PreToolUse` on a file no rule governs has nothing to say. If
+only the ones that spoke were recorded, a correctly wired but quiet hook would
+read as *never called*, which is exactly the false alarm this is meant to
+remove.
+
+**`sweepSessions` skips it.** The sweep clears session state older than a day.
+A fired-marker older than a day is not litter — it is the finding. *"Nothing has
+called PreCompact in a week"* is precisely what you want the report to say.
+
+**The summary line does not say "verified" when the probe said otherwise.** The
+first version printed *"the stet these hooks call is too old"* and then *"wired
+and verified, but Claude Code has never called any of it"* — two contradictory
+lines in one report, which teaches people to read neither.
+
+### What this closes
+
+The version-skew bug in this project recurred four times and finding 43 was its
+worst form: every safeguard green, the hook never called. The pattern each time
+was a check that could only agree with itself, because both halves of the
+conversation had the same author.
+
+This is the first check in stet that can fail for a reason nobody wrote. It does
+not ask our code anything. It reports whether something outside stet has, in
+fact, called it — and if the answer is *never*, it says the thing nobody thought
+to say out loud: hooks load when a session starts, so restart Claude Code.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
