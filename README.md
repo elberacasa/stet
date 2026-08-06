@@ -35,6 +35,25 @@ npx stetmark@latest demo   # the whole thing on real material, in a scratch copy
 Built for Claude Code: six hooks, two slash commands. Zero runtime dependencies,
 no account, no key, and nothing ever leaves your machine.
 
+### What it costs
+
+Measured on a real project, not estimated:
+
+```
+SessionStart   324 tokens, once   (the brief, plus whatever rules are unscoped)
+notes          ~25 tokens each, only for files actually opened, once per session
+```
+
+Everything is bounded. Rules are held to a token budget that never truncates
+silently. Notes are capped at four per file and twenty per session — past that
+the marginal note is not informing anyone, it is being scrolled past. And the
+hook costs about 55ms on each file an agent opens, against turns measured in
+tens of seconds.
+
+Nothing is resident. There is no always-on block competing with your work for
+context; each thing is delivered once, at the moment it applies, and then it is
+gone.
+
 ---
 
 ## Three kinds of memory

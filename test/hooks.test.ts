@@ -807,3 +807,33 @@ describe('notes on read', () => {
     expect(pre?.matcher, 'and still for the ones that write').toContain('Edit');
   });
 });
+
+// ── notes cannot become the session ────────────────────────────────────────
+describe('the ceiling on notes', () => {
+  it('stops after a session has been told enough', () => {
+    // Rules are held to a token budget; notes were capped per file and nowhere
+    // else, so a repo that accumulated them for a year could hand an agent four
+    // more on every file it opened. Nobody has hit it — which is when it is
+    // cheap to bound.
+    for (let i = 0; i < 40; i++) appendNote(root, `a fact about this area, number ${i}, worth stating`, ['src/**']);
+    let shown = 0;
+    for (let i = 0; i < 30; i++) {
+      const ctx = preToolUse(root, {
+        session_id: 'cap', cwd: root, tool_name: 'Read',
+        tool_input: { file_path: path.join(root, `src/file${i}.ts`) },
+      })?.hookSpecificOutput?.additionalContext ?? '';
+      shown += (ctx.match(/^· /gm) ?? []).length;
+    }
+    expect(shown).toBeGreaterThan(0);
+    expect(shown, 'bounded across the whole session').toBeLessThanOrEqual(20);
+  });
+
+  it('still says the first ones, so the cap is not a mute button', () => {
+    appendNote(root, 'the one fact that matters most in this area', ['src/**']);
+    const ctx = preToolUse(root, {
+      session_id: 'cap2', cwd: root, tool_name: 'Read',
+      tool_input: { file_path: path.join(root, 'src/a.ts') },
+    })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('the one fact that matters most');
+  });
+});

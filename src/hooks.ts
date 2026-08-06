@@ -349,14 +349,31 @@ export function preToolUse(root: string, input: HookInput, budget = DEFAULT_BUDG
  */
 function notesFor(root: string, rel: string | null, id: string | undefined): Note[] {
   if (rel === null) return [];
-  const already = new Set(loadSession(root, id).notesSeen);
+  const seenNotes = loadSession(root, id).notesSeen;
+  const room = MAX_NOTES_PER_SESSION - seenNotes.length;
+  if (room <= 0) return [];
+  const already = new Set(seenNotes);
   return readNotes(root)
     .filter((n) => !already.has(n.n) && n.globs.length && matchesAny(n.globs, rel))
-    .slice(0, MAX_NOTES);
+    .slice(0, Math.min(MAX_NOTES, room));
 }
 
 /** Enough to warn, not enough to become the thing people skip. */
 const MAX_NOTES = 4;
+
+/**
+ * And a ceiling for the whole session.
+ *
+ * Rules are held to a token budget. Notes were capped per file and nowhere
+ * else, so a repository that had accumulated them for a year could hand an
+ * agent four more on every file it opened, for as many files as it opened.
+ * Nobody has hit that — this project has thirteen notes and the focus timer
+ * has two — which is exactly when it is cheap to bound.
+ *
+ * Twenty is roughly five hundred tokens across a whole session. Past that the
+ * marginal note is not informing anyone; it is being scrolled past.
+ */
+const MAX_NOTES_PER_SESSION = 20;
 
 /** Everything unscoped, once per session. Also how the canon survives compaction. */
 export function canonOnce(root: string, input: HookInput, event: string, budget = DEFAULT_BUDGET): HookOutput | null {
