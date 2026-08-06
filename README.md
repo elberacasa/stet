@@ -154,6 +154,17 @@ deterministically, when a rule can't survive on its own:
 stet claude          # wire it in     ·  stet claude remove  ·  stet claude status
 ```
 
+That wires six hooks for the agent, and two slash commands for you — so the
+loop is driven from inside the session it interrupts:
+
+```
+/stet         what is waiting on you, and what the canon already says
+/stet-undo    take back a verdict, and the rule it earned
+```
+
+Both are removed by `stet claude remove`, and neither will overwrite a command
+of the same name that you wrote yourself.
+
 Every other human-in-the-loop tool writes instructions into a config file and
 hopes. That is the weakest place to put a rule: it is read once at session
 start, then competes with every token that arrives after it, and by turn sixty
@@ -187,6 +198,13 @@ two of six areas: **1046 tokens always-resident → 538 delivered just in time, 
 context is prompt-cached, so the cost saving is smaller than the token saving;
 and the real win is placement, not size — a reminder immediately before the
 decision beats a preamble sixty turns behind it.
+
+**A verdict binds the session that asked for it.** `SessionStart` states the
+canon once at the top. But a rule you earn *mid-session* — the one the agent is
+sitting there waiting for — has already missed that, and an unscoped rule never
+travels through `PreToolUse`. `UserPromptSubmit` delivers it at the next thing
+you type, once, so the answer you just gave governs the work in front of you
+rather than the work tomorrow.
 
 **Taste survives compaction.** `PostCompact` re-states the canon, because
 compaction is exactly when your preferences get summarised away.

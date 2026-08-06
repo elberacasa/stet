@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { expand, matches, matchesAny } from '../src/glob.js';
 import { canonOnce, churn, EVENTS, loadSession, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
-import { install, installed, settingsPath, uninstall, WIRING } from '../src/claude.js';
+import { install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
 import { addItem, init } from '../src/store.js';
 import { appendDirectRule, readRules } from '../src/rules.js';
 import { withLock } from '../src/lock.js';
@@ -372,5 +372,81 @@ describe('parallel agents', () => {
     expect(agents).toContain('stet:begin');
     expect(agents).toContain('stet:end');
     expect(fs.readdirSync(root).filter((f) => f.includes('.tmp'))).toHaveLength(0);
+  });
+});
+
+// ── the hole a mid-session verdict fell into ───────────────────────────────
+describe('a rule earned while the session is still running', () => {
+  it('reaches the agent that is still working', () => {
+    // SessionStart has already fired, and an unscoped rule never travels
+    // through PreToolUse — so before UserPromptSubmit was wired, the rule you
+    // had just given first bound an agent tomorrow. The code for it existed
+    // and was never installed.
+    appendDirectRule(root, 'never centre the hero', {});
+    const start = runHook(root, 'session-start', { session_id: 's1', cwd: root });
+    expect(JSON.stringify(start)).toMatch(/never centre the hero/);
+
+    appendDirectRule(root, 'error copy names the next action', {});
+    const prompt = runHook(root, 'user-prompt', { session_id: 's1', cwd: root });
+    const ctx = prompt?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx, 'the new rule must arrive').toMatch(/error copy names the next action/);
+    expect(ctx, 'and not repeat what this session already saw').not.toMatch(/never centre the hero/);
+  });
+
+  it('goes quiet once it has delivered', () => {
+    appendDirectRule(root, 'buttons name the action they take', {});
+    expect(runHook(root, 'user-prompt', { session_id: 's2', cwd: root })).toBeTruthy();
+    expect(runHook(root, 'user-prompt', { session_id: 's2', cwd: root })).toBeNull();
+  });
+
+  it('is wired, not merely implemented', () => {
+    // `stet hook events` advertised six; the installer wired five.
+    expect(WIRING.map((w) => w.arg).sort()).toEqual([...EVENTS].sort());
+  });
+});
+
+// ── the human's half of the wiring ─────────────────────────────────────────
+describe('slash commands', () => {
+  it('installs, and marks the files as its own', () => {
+    const written = installCommands(root, 'stet');
+    expect(written.length).toBe(2);
+    const body = fs.readFileSync(path.join(root, '.claude/commands/stet.md'), 'utf8');
+    expect(body).toContain('written by stet');
+    expect(body).toContain('!`stet status`');
+    expect(body).toContain('allowed-tools: Bash(stet:*)');
+  });
+
+  it('does not pre-approve every node process when pinned to a checkout', () => {
+    // Pinned, the command is `node /abs/path/stet.js`. Narrowing allowed-tools
+    // to Bash(node:*) there would whitelist every node process on the machine
+    // to save one permission prompt.
+    installCommands(root, '/usr/bin/node /tmp/stet.js');
+    const body = fs.readFileSync(path.join(root, '.claude/commands/stet.md'), 'utf8');
+    expect(body).not.toMatch(/allowed-tools/);
+    expect(body).toContain('!`/usr/bin/node /tmp/stet.js status`');
+  });
+
+  it('updates its own file when the command changes', () => {
+    // The first version recognised its own files by sniffing for the string
+    // "stet status", which the pinned body does not contain — so re-wiring
+    // silently refused to update and left a stale command behind.
+    installCommands(root, '/usr/bin/node /tmp/stet.js');
+    installCommands(root, 'stet');
+    expect(fs.readFileSync(path.join(root, '.claude/commands/stet.md'), 'utf8')).toContain('!`stet status`');
+  });
+
+  it('never touches a command the human wrote under the same name', () => {
+    fs.mkdirSync(path.join(root, '.claude/commands'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.claude/commands/stet.md'), 'my own command\n');
+    installCommands(root, 'stet');
+    expect(fs.readFileSync(path.join(root, '.claude/commands/stet.md'), 'utf8')).toBe('my own command\n');
+    uninstallCommands(root);
+    expect(fs.existsSync(path.join(root, '.claude/commands/stet.md'))).toBe(true);
+  });
+
+  it('removes only what it wrote', () => {
+    installCommands(root, 'stet');
+    expect(uninstallCommands(root).length).toBe(2);
+    expect(fs.existsSync(path.join(root, '.claude/commands/stet.md'))).toBe(false);
   });
 });

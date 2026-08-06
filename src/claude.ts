@@ -56,6 +56,18 @@ export const WIRING: Wiring[] = [
     arg: 'post-compact',
     why: 'states it again after compaction, which is when taste gets summarised away',
   },
+  {
+    // Implemented since the hooks existed and never installed, which left a
+    // hole exactly where this tool is supposed to be strongest: a verdict given
+    // in the middle of a session did not reach the agent that asked for it.
+    // SessionStart has already fired, and an unscoped rule never travels
+    // through PreToolUse — so the rule you just earned first bound an agent
+    // tomorrow. It arrives at the next thing you type instead, once, because
+    // canonOnce only ever sends what this session has not already been shown.
+    event: 'UserPromptSubmit',
+    arg: 'user-prompt',
+    why: 'delivers a rule earned mid-session to the agent that is still working',
+  },
 ];
 
 export function settingsPath(root: string, scope: 'project' | 'local'): string {
@@ -160,4 +172,123 @@ export function installed(root: string, scope: 'project' | 'local' = 'project'):
   } catch {
     return false;
   }
+}
+
+/**
+ * Slash commands, so the loop can be driven without leaving the session.
+ *
+ * The point of wiring stet into Claude Code is that the human never has to go
+ * anywhere else. Hooks handle the agent's half; this is the human's half —
+ * `/stet` to see what is waiting, `/stet-undo` to take back a verdict that
+ * should not have become a rule.
+ *
+ * The bodies are prompts, and each one carries live state injected by the
+ * shell, so Claude answers from what is actually there rather than from
+ * whatever it remembers about the repo.
+ */
+export const COMMANDS: Array<{ name: string; body: (cmd: string) => string }> = [
+  {
+    name: 'stet',
+    body: (cmd) => `${head(cmd, 'What is waiting on a human verdict, and the taste already recorded')}
+Current stet state:
+
+!\`${cmd} status\`
+
+Tell the user plainly what is waiting on them and what the canon already says.
+If anything is waiting, offer to open the decision page — run \`${cmd}\` — so
+they can judge it. It opens in a browser and blocks nothing here.
+
+Do not offer to answer the decisions yourself. They are waiting on a human on
+purpose; that is the entire point of them existing.
+`,
+  },
+  {
+    name: 'stet-undo',
+    body: (cmd) => `${head(cmd, 'Take back the last verdict, and the rule it earned')}
+The canon as it stands:
+
+!\`${cmd} rules\`
+
+The user wants to take back a verdict — usually because the rule it produced is
+not a rule, or the decision was wrong to have asked.
+
+Run \`${cmd} undo\` for the most recent one, or \`${cmd} undo <id>\` if they
+name a decision. To drop a rule without touching a decision, run
+\`${cmd} rule remove <n>\`.
+
+Then say what was removed and what the canon says now. If the decision went
+back in the queue, mention that judging it again will not be blind, because
+they have already seen the reveal.
+`,
+  },
+];
+
+/**
+ * Frontmatter. `allowed-tools` is only safe to narrow when the command is the
+ * bare word `stet`. Pinned to a checkout it reads `node /abs/path/stet.js`, and
+ * whitelisting `Bash(node:*)` there would pre-approve every node process on the
+ * machine to save one permission prompt. Omitted instead: Claude asks once.
+ */
+function head(cmd: string, description: string): string {
+  const allow = cmd === 'stet' ? 'allowed-tools: Bash(stet:*)\n' : '';
+  return `---\n${allow}description: ${description}\n---\n${MARK}\n`;
+}
+
+/**
+ * How we recognise a file as ours, for overwriting and for removal.
+ *
+ * The first version sniffed the body for the string "stet status", which the
+ * pinned form does not contain — it says "…/stet.js status" — so re-wiring
+ * silently refused to update its own file and left a stale command behind.
+ * Never infer ownership from content that varies.
+ */
+const MARK = '<!-- written by stet · safe to delete · `stet claude remove` -->';
+
+export function commandsDir(root: string): string {
+  return path.join(root, '.claude', 'commands');
+}
+
+/** Writes the slash commands. Returns the files it created or updated. */
+export function installCommands(root: string, command: string): string[] {
+  const dir = commandsDir(root);
+  fs.mkdirSync(dir, { recursive: true });
+  const written: string[] = [];
+  for (const c of COMMANDS) {
+    const file = path.join(dir, `${c.name}.md`);
+    const body = c.body(command);
+    let current = '';
+    try {
+      current = fs.readFileSync(file, 'utf8');
+    } catch {
+      /* new */
+    }
+    // Never clobber a command the user wrote themselves under the same name.
+    if (current && !current.includes(MARK)) continue;
+    if (current === body) continue;
+    fs.writeFileSync(file, body);
+    written.push(file);
+  }
+  return written;
+}
+
+/** Removes only the command files stet wrote. */
+export function uninstallCommands(root: string): string[] {
+  const dir = commandsDir(root);
+  const removed: string[] = [];
+  for (const c of COMMANDS) {
+    const file = path.join(dir, `${c.name}.md`);
+    try {
+      if (!fs.readFileSync(file, 'utf8').includes(MARK)) continue;
+      fs.rmSync(file);
+      removed.push(file);
+    } catch {
+      /* not there */
+    }
+  }
+  try {
+    if (!fs.readdirSync(dir).length) fs.rmdirSync(dir);
+  } catch {
+    /* not empty, or not there */
+  }
+  return removed;
 }

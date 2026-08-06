@@ -1097,6 +1097,111 @@ stet cannot tell you it is stale without doing the thing it promises not to do.
 
 ---
 
+## Fusing it with Claude Code
+
+The goal for this pass was that stet should feel like an upgrade to Claude Code
+rather than a tool bolted onto it. That meant looking at what Claude Code
+actually offers and what stet was leaving on the table.
+
+The first thing found was not a missing feature. It was a finished one that had
+never been switched on.
+
+### Finding 40 — the verdict bound tomorrow's agent, not the one waiting
+
+```
+$ stet hook events
+{"version":"0.20.0","events":[…,"user-prompt"]}   ← six implemented
+```
+
+```
+WIRING = [PreToolUse, PostToolUse, Stop, SessionStart, PostCompact]   ← five installed
+```
+
+`UserPromptSubmit` had been written, tested by the event dispatcher, and
+advertised by the probe that checks a wiring against its binary — and never
+added to the list of hooks the installer writes. Dead capability, reported as
+present.
+
+What it costs is specific, and it is the worst possible place for this tool to
+have a hole. Trace a rule earned in the middle of a session:
+
+```
+1. session starts — agent is told the canon (rule 1)
+2. mid-session, a decision lands and earns rule 2
+3. what reaches the agent still working in that session?
+   PreToolUse (unscoped rules never go here): [nothing]
+   SessionStart:                              already fired
+```
+
+The verdict a human gives to unblock an agent **does not reach that agent**. It
+governs the next session. The whole pitch is that an answer becomes binding, and
+the one moment it most obviously should bind — the agent is *right there*,
+waiting, having asked — was the moment it did not.
+
+Wired, it delivers exactly the new rule and nothing else, because `canonOnce`
+only ever sends what this session has not already been shown:
+
+```
+   UserPromptSubmit:
+   stet canon — verdicts this repo's owner already gave. Binding:
+   2. error copy names the next action, not the failure    ← only the new one
+
+4. and on the next prompt: [nothing — already delivered]
+```
+
+One line in a table. It had been sitting there since the hooks existed.
+
+### The human's half: /stet and /stet-undo
+
+Hooks are the agent's half of the wiring. There was no human half — judging
+meant leaving the session for a browser, and the previous release's `stet undo`
+meant leaving it for a terminal.
+
+`stet claude` now also writes two slash commands, so the loop is driven from
+inside the session it interrupts. Each carries live state injected by the shell,
+so Claude answers from what is actually in the repo rather than what it
+remembers.
+
+Which needed a primitive that did not exist: **`stet status`**. Every way to ask
+"what is waiting?" started a web server and opened a browser — the wrong shape
+for a person mid-session, for a slash command, or for anything that wants to
+render the state elsewhere. It prints, and `--json` for anything that wants to
+consume it.
+
+### Finding 41 — pre-approving every node process to save one prompt
+
+Slash commands take an `allowed-tools` line that pre-approves a command so the
+user is not asked each time. `Bash(stet:*)` is exactly right.
+
+But when stet is not on PATH the wiring pins an absolute path, and the command
+becomes `node /abs/path/stet.js` — so the same line generated
+`allowed-tools: Bash(/opt/homebrew/…/node:*)`, which pre-approves **every node
+process on the machine** to save one permission prompt.
+
+It is now omitted entirely in the pinned case. Claude asks once, which is the
+correct trade, and the narrow form comes back as soon as `stet` is on PATH.
+
+### Finding 42 — recognising its own files by content that varies
+
+The first version refused to overwrite a `/stet` command the user had written
+themselves, by checking whether the body contained `stet status`.
+
+The pinned body does not contain that string. It says `…/stet.js status`. So
+re-wiring silently declined to update **its own file** and left a stale command
+pointing at the old binary — the version-skew failure again, in a new costume,
+and one that would only appear for people who installed locally.
+
+Ownership is a marker line now, written into every file it creates:
+
+```
+<!-- written by stet · safe to delete · `stet claude remove` -->
+```
+
+Never infer ownership from content that varies. A command the human wrote is
+still never touched, and removal takes only what carries the marker.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1143,12 +1248,15 @@ Not one of these was visible from reading the code.
 | 37 | the same session | no way to take back a verdict or delete a rule: hand-delete the directory, hand-edit RULES.md |
 | 38 | the same session | two variants rendered identically and the screen asked for a choice between them — which is what produced the junk verdict in 35 |
 | 39 | the same session | the help advertised `stet serve`; typing it answered "unknown command" |
+| 40 | reading the wiring table | `UserPromptSubmit` was implemented, dispatched and advertised — and never installed, so a verdict given mid-session bound tomorrow's agent instead of the one waiting for it |
+| 41 | generating a slash command | `allowed-tools` was built from the resolved command, so a pinned install pre-approved every node process on the machine |
+| 42 | re-wiring a pinned install | it recognised its own command files by sniffing for a string the pinned form does not contain, so it refused to update itself and left a stale command behind |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other thirty-one reported success while broken.
+other thirty-four reported success while broken.
 
 Findings 35 to 39 are the first that came from **someone other than the author**,
 in a repository I have never seen, and they are the densest run in this log: five

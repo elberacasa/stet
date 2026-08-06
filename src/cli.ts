@@ -91,6 +91,7 @@ const FLAGS: Record<string, string[]> = {
   capture: ['views', 'out', 'json', 'settle'],
   demo: ['port', 'no-open'],
   undo: [],
+  status: ['json'],
   init: [],
   schema: [],
   version: [],
@@ -187,6 +188,8 @@ async function main(): Promise<void> {
       return demo();
     case 'undo':
       return undo();
+    case 'status':
+      return status();
     case 'version':
     case '-v':
       return out(VERSION());
@@ -240,7 +243,7 @@ async function hook(): Promise<void> {
 }
 
 async function claude(): Promise<void> {
-  const { install, installed, uninstall, WIRING } = await import('./claude.js');
+  const { install, installCommands, installed, uninstall, uninstallCommands, WIRING } = await import('./claude.js');
   // Local by default. A checked-in hook pointing at a binary a teammate has
   // not installed fails on every tool call and gates nothing — the repo would
   // claim a protection it is not providing, which is worse than no protection.
@@ -250,7 +253,9 @@ async function claude(): Promise<void> {
 
   if (sub === 'remove' || args.flags.remove) {
     const r = uninstall(root, scope);
+    const gone = uninstallCommands(root);
     out(r.removed.length ? `  ${cool('removed')} ${r.removed.length} hook(s) from ${path.relative(root, r.file)}` : dim('  nothing wired'));
+    if (gone.length) out(`  ${cool('removed')} ${gone.length} slash command(s)`);
     return;
   }
   if (sub === 'status') {
@@ -318,9 +323,19 @@ async function claude(): Promise<void> {
   out();
   out(`  ${warm('stet')} is now a gate in this repo, not a suggestion.`);
   out();
-  for (const w of WIRING) out(`  ${cool(w.event.padEnd(13))} ${dim(w.why)}`);
+  for (const w of WIRING) out(`  ${cool(w.event.padEnd(17))} ${dim(w.why)}`);
   out();
   out(`  ${dim('written to')} ${path.relative(root, r.file) || r.file}`);
+
+  // The hooks are the agent's half. These are the human's: the loop can be
+  // driven without leaving the session it interrupts.
+  const cmds = installCommands(root, command);
+  if (cmds.length) {
+    out();
+    out(`  ${cool('/stet')}        ${dim('what is waiting on you, and what the canon already says')}`);
+    out(`  ${cool('/stet-undo')}   ${dim('take back a verdict, and the rule it earned')}`);
+    out(`  ${dim('written to')} ${path.relative(root, path.dirname(cmds[0]))}`);
+  }
 
   if (pinned) {
     out();
@@ -930,6 +945,54 @@ function doSync(): void {
  * directory and hand-editing RULES.md — a bad answer for a file this tool tells
  * you to treat as the product.
  */
+/**
+ * What is waiting, and what has been settled — without starting a server.
+ *
+ * There was no way to ask this. `stet` serves a page and opens a browser, which
+ * is the wrong shape for a person mid-session in a terminal, for a slash
+ * command, or for anything that wants to render the state somewhere else.
+ */
+function status(): void {
+  const pending = listEntries(root, 'pending');
+  const rules = readRules(root);
+  const broken = pending.filter((e) => !e.ok);
+  const ok = pending.filter((e) => e.ok);
+
+  if (args.flags.json) {
+    return out(JSON.stringify({
+      version: VERSION(),
+      root,
+      pending: ok.map((e) => (e.ok ? { id: e.id, question: e.item.question, globs: e.item.globs ?? [] } : null)),
+      broken: broken.map((e) => ({ id: e.id, error: e.ok ? '' : e.error })),
+      rules: rules.length,
+      scoped: rules.filter((r) => r.globs.length).length,
+    }));
+  }
+
+  out();
+  out(`  ${warm('stet')} ${dim(VERSION())}  ${dim(path.relative(process.cwd(), root) || '.')}`);
+  out();
+  if (!ok.length && !broken.length) {
+    out(dim('  nothing waiting on you'));
+  } else {
+    // Width from the content, not a guess: a slug long enough to overflow a
+    // fixed column is exactly what `stet ask` generates from a long question.
+    const w = Math.max(...[...ok, ...broken].map((e) => e.id.length));
+    out(`  ${cool(String(ok.length))} waiting on a verdict`);
+    for (const e of ok) {
+      if (!e.ok) continue;
+      const claims = e.item.globs?.length ? dim(`  claims ${e.item.globs.join(', ')}`) : '';
+      out(`    ${warm(e.id.padEnd(w))}  ${e.item.question}${claims}`);
+    }
+    for (const e of broken) out(`    ${warm(e.id.padEnd(w))}  ${dim(e.ok ? '' : e.error)}`);
+  }
+  out();
+  const scoped = rules.filter((r) => r.globs.length).length;
+  out(`  ${cool(String(rules.length))} ${rules.length === 1 ? 'rule' : 'rules'} in the canon${scoped ? dim(`, ${scoped} scoped to paths`) : ''}`);
+  if (ok.length) out(dim('  run `stet` to judge them'));
+  out();
+}
+
 function undo(): void {
   const id = args.rest[0] ?? lastDecided(root)?.id;
   if (!id) throw new Error('nothing has been decided yet');
@@ -994,6 +1057,7 @@ function help(): void {
   ${cool('stet capture')} A=<url> B=<url>  matched screenshots of every variant at every view
   ${cool('stet demo')}                   seven real decisions to judge, in a scratch copy
   ${cool('stet schema')}                 the item format, as a worked example
+  ${cool('stet status')} [--json]        what is waiting, and how big the canon is
   ${cool('stet await')} <id> [--timeout] block until decided, print the verdict
   ${cool('stet undo')} [<id>]            take back the last verdict, and the rule it earned
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
@@ -1005,6 +1069,7 @@ function help(): void {
   ${cool('stet claude')}                 wire into Claude Code — rules arrive when they apply,
                               and writes into an undecided path are denied
   ${cool('stet claude remove')}          unwire  ${dim('·')}  ${cool('stet claude status')}  check
+  ${dim('                            it also adds')} ${cool('/stet')} ${dim('and')} ${cool('/stet-undo')} ${dim('inside the session')}
 
   ${dim('--budget <tokens>')}           cap the injected block (default ${DEFAULT_BUDGET})
 `);
