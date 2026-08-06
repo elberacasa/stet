@@ -1,0 +1,610 @@
+╭─── Claude Code v2.1.223 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│               Welcome back alejandro!              │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added owner wildcard e… │
+│  Opus 5 · Claude Max · alejoberacasa@gmail.com's   │ Added a warning when w… │
+│  Organization                                      │ Added a `/teleport` hi… │
+│                      ~/focus                       │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ The switch from focus to break feels abrupt. Make it smoother.                
+
+⏺ I'll look at the current transition first.
+
+  Read 3 files, listed 2 directories, ran 2 shell commands (ctrl+o to expand)
+
+⏺ Now I have the full picture. The switch currently happens in one frame:
+  advance() swaps phase, rebuilds the fuse, and fires a triple bloom flash all
+  at once. Let me build a proper handover.
+
+⏺ Update(index.html)
+  ⎿  Added 3 lines, removed 4 lines
+      80      text-transform: uppercase;
+      81    }
+      82  
+      83 -  .meta__phase{                                                
+      84 -    color: var(--bright);                                      
+      85 -    transition: color 600ms ease;                              
+      86 -  }                                                            
+      83 +  /* No colour transition: the phase swap happens mid-handover,
+         + while this is                                                 
+      84 +     faded out, so it fades back in already wearing the new col
+         +our. */                                                        
+      85 +  .meta__phase{ color: var(--bright); }                        
+      86  
+      87    .meta__round{ color: var(--dim); }
+      88  
+
+⏺ Update(index.html)
+  ⎿  Added 14 lines, removed 8 lines
+      223  
+      224    .keys b{ font-weight: 400; color: var(--dim); }
+      225  
+      226 +  /* ─── break ───────────────────────────────────────────────
+          +──────────────                                                
+      227 +     Warm figure: the field stays dark, the type takes the acc
+          +ent. The clock                                                
+      228 +     and the phase label change under the handover's fade; the
+          + rules change                                                 
+      229 +     at the peak of the bloom, which is bright enough to cover
+          + the cut. */                                                  
+      230 +                                                              
+      231 +  .is-break .clock{ color: var(--accent-hot); }               
+      232 +  .is-break .clock__sep{ color: color-mix(in srgb, var(--accen
+          +t-hot) 40%, transparent); }                                   
+      233 +  .is-break .meta__phase{ color: var(--accent-hot); }         
+      234 +  .is-break .meta,                                            
+      235 +  .is-break .controls{ border-color: color-mix(in srgb, var(--
+          +accent) 32%, transparent); }                                  
+      236 +                                                              
+      237    /* ─── the round-change signal ─────────────────────────────
+           ──────────── */
+      238  
+      239    /* lights the periphery, leaves the middle readable — you ca
+           tch it without
+      229 -     looking at it */                                         
+      240 +     looking at it. One slow swell, driven from js on the rend
+          +er loop (see the                                              
+      241 +     handover) rather than a css animation, so a backgrounded 
+          +tab can't strand                                              
+      242 +     it lit. */                                               
+      243    .bloom{
+      244      position: fixed;
+      245      inset: 0;
+     ...
+      249      background: radial-gradient(105% 75% at 50% 50%, transpare
+           nt 24%, var(--accent) 100%);
+      250    }
+      251  
+      239 -  .bloom.is-firing{ animation: bloom 1.5s ease-in-out 3; }    
+      240 -                                                              
+      241 -  @keyframes bloom{                                           
+      242 -    0%, 100%{ opacity: 0; }                                   
+      243 -    45%     { opacity: 0.22; }                                
+      244 -  }                                                           
+      245 -                                                              
+      252    .sr{
+      253      position: absolute;
+      254      width: 1px; height: 1px;
+
+⏺ Update(index.html)
+  ⎿  Added 2 lines, removed 2 lines
+      272        animation-iteration-count: 1 !important;
+      273        transition-duration: 0.01ms !important;
+      274      }
+      275 -    .bloom.is-firing{ animation: hold 2.4s steps(1) 1; }      
+      276 -    @keyframes hold{ 0%,92%{ opacity:.17 } 100%{ opacity:0 } }
+      275 +    /* The handover keeps its timing here — the pause between 
+          +rounds is pacing,                                             
+      276 +       not motion. It just drops the travel and crossfades in 
+          +place. */                                                     
+      277    }
+      278  </style>
+      279  </head>
+
+⏺ Now the JS. First the state and handover machinery:
+
+⏺ Update(index.html)
+  ⎿  Added 7 lines
+      332      endAt: 0,
+      333      flashUntil: 0,
+      334      freshUntil: 0,
+      335 +    handoverAt: 0,    // wall time the current handover began;
+          + 0 = none                                                     
+      336 +    swapped: false,   // has this handover crossed over to the
+          + new phase yet                                                
+      337 +    bloomAt: 0,                                               
+      338    };
+      339  
+      340    const duration = () => (state.phase === "focus" ? FOCUS_MS :
+            BREAK_MS);
+      341    const pad = (n) => String(n).padStart(2, "0");
+      342  
+      343 +  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);         
+      344 +  const ease = (v) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(
+          +-2 * v + 2, 3) / 2);                                          
+      345 +  const reduced = matchMedia("(prefers-reduced-motion: reduce)
+          +");                                                           
+      346 +                                                              
+      347    /* Real wall time, never scaled — the "a round just changed"
+            window is about
+      348       how long a human needs to catch it, not about timer time.
+            */
+      349    const wall = Date.now.bind(Date);
+
+⏺ Now replace advance() with the handover:
+
+⏺ Update(index.html)
+  ⎿  Added 100 lines, removed 9 lines
+      571      paintFavicon(ms / duration());
+      572    }
+      573  
+      574 -  /* ── transitions ──────────────────────────────────────────
+          -─────────── */                                                
+      574 +  /* ── the handover ─────────────────────────────────────────
+          +─────────────                                                 
+      575 +     A round doesn't cut to the next one, it hands over. The f
+          +use goes out,                                                 
+      576 +     folds away right to left, and the screen crosses over und
+          +er the brightest                                              
+      577 +     part of the bloom; then the next round's ruler unrolls le
+          +ft to right and                                               
+      578 +     its clock fades up. Nothing on screen changes while you c
+          +an see it change.                                             
+      579  
+      576 -  function advance() {                                        
+      580 +     Driven from wall time on the render loop rather than css,
+          + for the same                                                 
+      581 +     reason the ticks are (see paintFuse): an occluded tab fre
+          +ezes css                                                      
+      582 +     timelines, and a handover stranded halfway leaves an empt
+          +y fuse and an                                                 
+      583 +     invisible clock. Every value here is recomputed from the 
+          +clock each                                                    
+      584 +     frame, so a tab that sleeps through the whole thing wakes
+          + up on the                                                    
+      585 +     finished state instead of in the middle of it. */        
+      586 +                                                              
+      587 +  const HANDOVER_MS = 1400;                                   
+      588 +  const SWAP = 0.46;       // how far in the old screen become
+          +s the new one                                                 
+      589 +  const LEAD = 0.55;       // share of each beat spent stagger
+          +ing the ticks                                                 
+      590 +  const BLOOM_MS = 3400;   // the light outlasts the motion, o
+          +n purpose                                                     
+      591 +                                                              
+      592 +  function fade(node, v) {                                    
+      593 +    const s = v.toFixed(3);                                   
+      594 +    if (node.style.opacity !== s) node.style.opacity = s;     
+      595 +  }                                                           
+      596 +                                                              
+      597 +  /* Ticks leave and arrive one after another rather than as a
+          + block: each one                                              
+      598 +     eases over the tail of the beat, offset by its place in t
+          +he row. */                                                    
+      599 +  function sweepFuse(p, leaving) {                            
+      600 +    const n = ticks.length;                                   
+      601 +    const flat = reduced.matches;                             
+      602 +    for (let i = 0; i < n; i++) {                             
+      603 +      const order = leaving ? n - 1 - i : i;                  
+      604 +      const start = (order / Math.max(1, n - 1)) * LEAD;      
+      605 +      const v = ease(clamp01((p - start) / (1 - LEAD)));      
+      606 +      const shown = leaving ? 1 - v : v;                      
+      607 +      fade(ticks[i], shown);                                  
+      608 +      ticks[i].style.transform = flat                         
+      609 +        ? ""                                                  
+      610 +        : "scaleY(" + (0.08 + 0.92 * shown).toFixed(3) + ")"; 
+      611 +    }                                                         
+      612 +  }                                                           
+      613 +                                                              
+      614 +  function crossOver() {                                      
+      615 +    state.swapped = true;                                     
+      616      const toBreak = state.phase === "focus";
+      617      if (toBreak) {
+      618        state.phase = "break";
+     ...
+      620        state.phase = "focus";
+      621        state.round += 1;
+      622      }
+      623 +    buildFuse(false);                                         
+      624 +  }                                                           
+      625  
+      585 -    state.remaining = duration();                             
+      626 +  function endHandover() {                                    
+      627 +    state.handoverAt = 0;                                     
+      628 +    for (const t of ticks) {                                  
+      629 +      t.style.opacity = "";                                   
+      630 +      t.style.transform = "";                                 
+      631 +    }                                                         
+      632 +    el.clock.style.opacity = "";                              
+      633 +    el.phase.style.opacity = "";                              
+      634 +    el.round.style.opacity = "";                              
+      635 +  }                                                           
+      636 +                                                              
+      637 +  /* Cut a handover short — a keypress mid-transition means so
+          +meone is looking                                              
+      638 +     right at it, so land on the finished state instead of ani
+          +mating past them. */                                          
+      639 +  function settle() {                                         
+      640 +    if (!state.handoverAt) return;                            
+      641 +    if (!state.swapped) crossOver();                          
+      642 +    endHandover();                                            
+      643 +    state.bloomAt = 0;                                        
+      644 +    el.bloom.style.opacity = "";                              
+      645 +  }                                                           
+      646 +                                                              
+      647 +  function paintBloom() {                                     
+      648 +    if (!state.bloomAt) return;                               
+      649 +    const t = (wall() - state.bloomAt) / BLOOM_MS;            
+      650 +    if (t >= 1) {                                             
+      651 +      state.bloomAt = 0;                                      
+      652 +      el.bloom.style.opacity = "";                            
+      653 +      return;                                                 
+      654 +    }                                                         
+      655 +    // peaks exactly on the cross-over, then falls for the res
+          +t of its life                                                 
+      656 +    const rise = (HANDOVER_MS * SWAP) / BLOOM_MS;             
+      657 +    const v = t < rise ? ease(t / rise) : 1 - ease((t - rise) 
+          +/ (1 - rise));                                                
+      658 +    fade(el.bloom, v * 0.24);                                 
+      659 +  }                                                           
+      660 +                                                              
+      661 +  /* ── transitions ──────────────────────────────────────────
+          +─────────── */                                                
+      662 +                                                              
+      663 +  function advance() {                                        
+      664 +    const toBreak = state.phase === "focus";                  
+      665 +                                                              
+      666 +    /* The last light goes out before the ruler folds away — o
+          +therwise the                                                  
+      667 +       active tick keeps pulsing as it shrinks. */            
+      668 +    for (let i = 0; i < ticks.length; i++) {                  
+      669 +      if (tickState[i] !== "spent") {                         
+      670 +        tickState[i] = "spent";                               
+      671 +        ticks[i].className = tickClass(i, "spent");           
+      672 +      }                                                       
+      673 +    }                                                         
+      674 +                                                              
+      675 +    /* The next round is timed from the boundary, not from the
+          + end of the                                                   
+      676 +       handover: the 1.4 seconds it takes are the first 1.4 of
+          + that round, and                                              
+      677 +       they pass while its clock is still faded out. Nothing d
+          +rifts. */                                                     
+      678 +    state.remaining = toBreak ? BREAK_MS : FOCUS_MS;          
+      679      state.endAt = Date.now() + state.remaining;
+      680      state.flashUntil = Date.now() + 20000;
+      681      state.freshUntil = wall() + 15000;
+      682 +    state.handoverAt = wall();                                
+      683 +    state.swapped = false;                                    
+      684 +    state.bloomAt = wall();                                   
+      685  
+      590 -    buildFuse(false);                                         
+      686      chime(toBreak ? "break" : "focus");
+      687  
+      593 -    el.bloom.classList.remove("is-firing");                   
+      594 -    void el.bloom.offsetWidth;      // restart the animation  
+      595 -    el.bloom.classList.add("is-firing");                      
+      596 -                                                              
+      688      el.announce.textContent = toBreak
+      689        ? "Focus round " + state.round + " complete. Five minute
+            break."
+      599 -      : "Break over. Round " + state.round + ", twenty five mi
+          -nutes.";                                                      
+      690 +      : "Break over. Round " + (state.round + 1) + ", twenty f
+          +ive minutes.";                                                
+      691  
+      692      render();
+      693    }
+
+⏺ Now render() has to drive it:
+
+⏺ Update(index.html)
+  ⎿  Added 27 lines, removed 3 lines
+      542    }
+      543  
+      544    function render() {
+      545 -    const ms = state.running                                  
+      546 -      ? Math.max(0, state.endAt - Date.now())                 
+      545 +    /* `held` is the first beat of a handover: the outgoing ro
+          +und is still on                                               
+      546 +       screen, so it holds at 00:00 rather than showing the ne
+          +xt round's time                                               
+      547 +       through the fade. */                                   
+      548 +    let held = false;                                         
+      549 +                                                              
+      550 +    if (state.handoverAt) {                                   
+      551 +      const hp = clamp01((wall() - state.handoverAt) / HANDOVE
+          +R_MS);                                                        
+      552 +      if (hp >= SWAP && !state.swapped) crossOver();          
+      553 +      held = hp < SWAP;                                       
+      554 +                                                              
+      555 +      if (hp >= 1) {                                          
+      556 +        endHandover();                                        
+      557 +      } else {                                                
+      558 +        const beat = held ? hp / SWAP : (hp - SWAP) / (1 - SWA
+          +P);                                                           
+      559 +        const v = held ? 1 - ease(beat) : ease(beat);         
+      560 +        fade(el.clock, v);                                    
+      561 +        fade(el.phase, v);                                    
+      562 +        fade(el.round, v);                                    
+      563 +        sweepFuse(beat, held);                                
+      564 +      }                                                       
+      565 +    }                                                         
+      566 +                                                              
+      567 +    paintBloom();                                             
+      568 +                                                              
+      569 +    const ms = held ? 0                                       
+      570 +      : state.running ? Math.max(0, state.endAt - Date.now()) 
+      571        : state.remaining;
+      572  
+      573      const text = drawClock(ms);
+      550 -    paintFuse(ms);                                            
+      574 +    if (!held) paintFuse(ms);                                 
+      575  
+      576      const onBreak = state.phase === "break";
+      577      const label = onBreak ? "Break" : "Focus";
+
+⏺ Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      592      el.body.classList.toggle("is-paused", !state.running);
+      593      el.body.classList.toggle("is-break", onBreak);
+      594      el.round.classList.toggle("is-fresh", wall() < state.fresh
+           Until);
+      595 -    paintFavicon(ms / duration());                            
+      595 +    paintFavicon(held ? 0 : ms / duration());                 
+      596    }
+      597  
+      598    /* ── the handover ─────────────────────────────────────────
+           ─────────────
+
+⏺ Now the controls, so a keypress mid-handover behaves:
+
+⏺ Update(index.html)
+  ⎿  Added 1 line
+      728    /* ── controls ─────────────────────────────────────────────
+           ─────────── */
+      729  
+      730    function toggle() {
+      731 +    settle();                                                 
+      732      if (state.running) {
+      733        state.remaining = Math.max(0, state.endAt - Date.now());
+      734        state.running = false;
+
+⏺ Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      741    }
+      742  
+      743    function reset() {
+      744 +    settle();                                                 
+      745      state.phase = "focus";
+      746      state.round = 1;
+      747      state.running = false;
+      748      state.remaining = FOCUS_MS;
+      749      state.flashUntil = 0;
+      750      state.freshUntil = 0;
+      750 -    el.bloom.classList.remove("is-firing");                   
+      751      buildFuse(false);
+      752      el.announce.textContent = "Reset. Round 1, twenty five min
+           utes.";
+      753      render();
+
+  Searched for 1 pattern, called claude-in-chrome 3 times, ran 4 shell commands (ctrl+o to expand)
+⏺ Update(index.html)
+  ⎿  Added 1 line, removed 1 line
+      764  
+      765    addEventListener("visibilitychange", () => { if (!document.h
+           idden) render(); });
+      766  
+      767 -  buildFuse(!matchMedia("(prefers-reduced-motion: reduce)").ma
+          -tches);                                                       
+      767 +  buildFuse(!reduced.matches);                                
+      768    render();
+      769  })();
+      770  </script>
+
+  Called claude-in-chrome 11 times, ran 2 shell commands (ctrl+o to expand)
+
+⏺ Update(previews/build.py)
+  ⎿  Added 7 lines, removed 2 lines
+      26    if (PIN) { state.phase = "break"; state.remaining = BREAK_MS;
+           buildFuse(false); render(); }"""
+      27  
+      28  
+      29 -def build(name, css, rate, extra_markup=""):                   
+      29 +def build(name, css, rate, extra_markup="", handover_ms=None): 
+      30      out = SRC
+      31  
+      32 -    # scaled clock                                             
+      32 +    # scaled clock. `wall` binds Date.now without calling it, s
+         +o it survives the                                              
+      33 +    # rewrite below and the handover keeps playing at true spee
+         +d on a fast clock.                                             
+      34      out = out.replace('  "use strict";\n', '  "use strict";\n' 
+          + DEMO_HEAD % {"rate": rate}, 1)
+      35      out = re.sub(r"\bDate\.now\(\)", "now()", out)
+      36  
+      37 +    if handover_ms is not None:                                
+      38 +        out = out.replace("const HANDOVER_MS = 1400;",         
+      39 +                          "const HANDOVER_MS = %d;" % handover_
+         +ms, 1)                                                         
+      40 +                                                               
+      41      # auto-run, so the page is already in motion when it opens
+      42      out = out.replace(BOOT, BOOT + PIN_BOOT + "\n  setTimeout((
+          ) => el.toggle.click(), 500);", 1)
+      43  
+
+⏺ Update(previews/build.py)
+  ⎿  Added 8 lines
+      190  
+      191  FRAME = '  <div class="frame" aria-hidden="true"></div>\n'
+      192  
+      193 +# ── how long the hand-over between rounds takes ─────────────
+          +──────────────────                                            
+      194 +#                                                             
+      195 +# Same transition in all three, only the length differs. The h
+          +andover runs on                                               
+      196 +# real wall time even here, so what you watch is what you will
+          + get.                                                         
+      197 +                                                              
+      198  made = [
+      199      build("break-a.html", BREAK_A, 50),
+      200      build("break-b.html", BREAK_B, 50),
+     ...
+      202      build("round-a.html", ROUND_A, 80),
+      203      build("round-b.html", ROUND_B, 80),
+      204      build("round-c.html", ROUND_C, 80),
+      205 +    build("handover-a.html", "", 50, handover_ms=900),        
+      206 +    build("handover-b.html", "", 50, handover_ms=1400),       
+      207 +    build("handover-c.html", "", 50, handover_ms=2200),       
+      208  ]
+      209  print("\n".join(made))
+
+  Called claude-in-chrome 2 times, ran 1 shell command (ctrl+o to expand)
+
+⏺ The preview build silently stopped auto-starting — my buildFuse tidy broke a
+  string match in build.py:
+
+⏺ Update(previews/build.py)
+  ⎿  Added 1 line, removed 1 line
+      20    const now = () => T0 + (__w() - T0) * RATE;
+      21  """
+      22  
+      23 -BOOT = '  buildFuse(!matchMedia("(prefers-reduced-motion: reduc
+         -e)").matches);\n  render();'                                   
+      23 +BOOT = "  buildFuse(!reduced.matches);\n  render();"           
+      24  
+      25  PIN_BOOT = """
+      26    if (PIN) { state.phase = "break"; state.remaining = BREAK_MS;
+           buildFuse(false); render(); }"""
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(previews/build.py)
+  ⎿  Added 14 lines, removed 6 lines
+      26    if (PIN) { state.phase = "break"; state.remaining = BREAK_MS;
+           buildFuse(false); render(); }"""
+      27  
+      28  
+      29 +def sub(text, old, new):                                       
+      30 +    """Every hook below is a literal lifted out of index.html. 
+         +Edit that file and                                             
+      31 +    a hook can stop matching — silently, leaving a preview that
+         + looks fine and                                                
+      32 +    isn't the thing you meant to show. So a miss is an error, l
+         +oudly."""                                                      
+      33 +    if old not in text:                                        
+      34 +        raise SystemExit("build.py: index.html no longer contai
+         +ns:\n  " + old.strip())                                        
+      35 +    return text.replace(old, new, 1)                           
+      36 +                                                               
+      37 +                                                               
+      38  def build(name, css, rate, extra_markup="", handover_ms=None):
+      39      out = SRC
+      40  
+      41      # scaled clock. `wall` binds Date.now without calling it, s
+          o it survives the
+      42      # rewrite below and the handover keeps playing at true spee
+          d on a fast clock.
+      34 -    out = out.replace('  "use strict";\n', '  "use strict";\n' 
+         -+ DEMO_HEAD % {"rate": rate}, 1)                               
+      43 +    out = sub(out, '  "use strict";\n', '  "use strict";\n' + D
+         +EMO_HEAD % {"rate": rate})                                     
+      44      out = re.sub(r"\bDate\.now\(\)", "now()", out)
+      45  
+      46      if handover_ms is not None:
+      38 -        out = out.replace("const HANDOVER_MS = 1400;",         
+      39 -                          "const HANDOVER_MS = %d;" % handover_
+         -ms, 1)                                                         
+      47 +        out = sub(out, "const HANDOVER_MS = 1400;", "const HAND
+         +OVER_MS = %d;" % handover_ms)                                  
+      48  
+      49      # auto-run, so the page is already in motion when it opens
+      42 -    out = out.replace(BOOT, BOOT + PIN_BOOT + "\n  setTimeout((
+         -) => el.toggle.click(), 500);", 1)                             
+      50 +    out = sub(out, BOOT, BOOT + PIN_BOOT + "\n  setTimeout(() =
+         +> el.toggle.click(), 500);")                                   
+      51  
+      52      if extra_markup:
+      45 -        out = out.replace('  <div class="bloom"', extra_markup 
+         -+ '  <div class="bloom"', 1)                                   
+      53 +        out = sub(out, '  <div class="bloom"', extra_markup + '
+         +  <div class="bloom"')                                         
+      54  
+      47 -    out = out.replace("</style>", "\n  /* ── variant ──────────
+         -───────────── */\n" + css + "\n</style>", 1)                   
+      55 +    out = sub(out, "</style>", "\n  /* ── variant ─────────────
+         +────────── */\n" + css + "\n</style>")                         
+      56      (HERE / name).write_text(out)
+      57      return name
+      58  
+
+  Called claude-in-chrome 2 times, ran 1 shell command (ctrl+o to expand)
+
+⏺ Write(previews/ask-handover.json)
+  ⎿  Wrote 26 lines to previews/ask-handover.json
+      1 {
+      3   "question": "How long should one round take to hand over to the
+         next?",
+      4   "notes": "The switch used to happen in a single frame. Now the 
+        rightest part of the bloom, and the next round's ruler unrolls. O
+        nly the length of that differs between these three — everything e
+      5   "how": "Each preview is the real timer on a fast clock, so a ro
+        und turns over every half minute, but the handover itself runs on
+         real wall time — its speed here is its speed for you. Watch a co
+        r it still feels like an interruption, or like 
+     … +31 lines (ctrl+o to expand)
+
+  Read 1 file, listed 1 directory, called claude-in-chrome, ran 6 shell commands (ctrl+o to expand)
+
+⏺ The switch is now a handover rather than a cut. index.html:598
+
+  What happens between rounds, over 1.4s:
+  - The fuse goes out first — the active tick stops pulsing before anything
+  moves.
+  - The row folds away right-to-left, staggered, while the clock and the header
+  labels fade down. The clock holds at 00:00 instead of flashing the next
+  round's time through the fade.
+  - At 46% the screen crosses over — phase, round, colours, new fuse — while
+  it's invisible.
+  - The next round's ruler unrolls left-to-right and its clock fades up.
+
+  The bloom was three 1.5s flashes over 4.5s. It's now a single slow swell
+  peaking exactly on the cross-over, so the light both signals the round change
+  and covers the one thing that can't fade (the rule lines changing colour).
+
+  Two things worth flagging:
+
+  It's driven from JS on the render loop, not CSS. Your note on this file says
+  an occluded tab freezes CSS timelines and strands ticks mid-transition — a
+  stranded handover would leave an empty fuse and an invisible clock. Every
+  value is recomputed from wall time each frame, so a tab that sleeps through
+  the whole thing wakes up on the finished state. I verified that: sampling
+  under a throttled tab, it landed clean with no leftover inline styles.
+  Pressing space mid-handover settles it instantly rather than animating past
+  you.
+
+  The break screen wasn't in the file. Canon rule 2 ruled on it (warm figure —
+  dark field, accent numerals and rules) but index.html had no .is-break styles
+  at all, only the is-break class toggle and an orphaned 600ms colour transition
+  on the phase label. I've applied it — the handover needs something to hand
+  over to, and the crossfade is what makes the colour change land softly. Say
+  the word if that was deliberately dropped.
+
+  The length is a taste call I didn't want to make for you, so it's queued: stet
+  → "How long should one round take to hand over to the next?" — three live
+  previews at 0.9s / 1.4s / 2.2s, copied into the decision so they work without
+  a server. index.html is claimed until you rule. It ships at 1.4s meanwhile.
+
+  One thing I broke and fixed on the way: previews/build.py patches index.html
+  by literal string match, and my tidy-up of the boot line silently made every
+  preview come out as plain index.html — right-looking, wrong page. build() now
+  raises on a missed hook, and there's a note on it.
+
+✻ Cooked for 13m 20s
+
+❯ /export                                                                         ⎿  Conversation copied to clipboard

@@ -2357,6 +2357,82 @@ and five judged decisions to be able to write it honestly.
 
 ---
 
+## The test that mattered
+
+One sentence, in a session that had never seen the file:
+
+> *The switch from focus to break feels abrupt. Make it smoother.*
+
+That is the most transition-inviting request in web development. The file even
+had a `transition: color 600ms ease` sitting in it, ready to be extended. And
+this codebase has a trap: a note written two sessions earlier saying the fuse
+ticks deliberately have **no** CSS transitions, because Chrome freezes
+animation timelines in a background tab and a tick strands mid-colour.
+
+The agent opened `index.html`. The note arrived on the read, before it planned.
+Then it **deleted** the existing transition:
+
+```diff
+- .meta__phase{ color: var(--bright); transition: color 600ms ease; }
++ /* No colour transition: the phase swap happens mid-handover, while this is
++    faded out, so it fades back in already wearing the new colour. */
++ .meta__phase{ color: var(--bright); }
+```
+
+and built the entire 1.4-second handover in JavaScript on the render loop. Its
+own words:
+
+> *It's driven from JS on the render loop, not CSS. Your note on this file says
+> an occluded tab freezes CSS timelines and strands ticks mid-transition — a
+> stranded handover would leave an empty fuse and an invisible clock. Every
+> value is recomputed from wall time each frame, so a tab that sleeps through
+> the whole thing wakes up on the finished state. I verified that: sampling
+> under a throttled tab, it landed clean.*
+
+A fact learned in one session, by one agent, changed the architecture chosen by
+a different agent two sessions later — and that agent then went and **verified
+the constraint empirically** rather than taking the note's word for it.
+
+That is the claim this whole tool rests on, and it is the first time there has
+been evidence for it rather than an argument.
+
+### What else the same run confirmed
+
+**The durability guidance held.** Three live previews, `A-1.html B-2.html
+C-3.html`, copied into the decision. Last time the agent left them on a
+preview server that would die with its session; this time it wrote *"copied
+into the decision so they work without a server"* unprompted.
+
+**The blind test held.** No `(current)`, no *"I picked"* anywhere in the item.
+
+**It wrote a new note, and it is the best one yet:**
+
+> *previews/build.py patches index.html by literal string match… rename or
+> reformat any of those and the preview silently comes out as plain index.html:
+> it looks right, it just isn't the variant you meant to show, and you can waste
+> a long time judging the wrong page. build() now raises on a missed hook
+> instead of shrugging.*
+
+An agent, in a project unrelated to stet, independently discovered the exact
+failure class this log has recorded sixty times — *it looks right, it just
+isn't* — and wrote it down for whoever comes next.
+
+### And an accident worth keeping
+
+It also said: *"Canon rule 2 ruled on it (warm figure — dark field, accent
+numerals and rules)."*
+
+Canon rule 2 reads **"i dont see a difference between abc so A it is"**. Useless
+as an injected line — and the *decision underneath it* was still usable, because
+the provenance records what was asked and what won. The rule text was noise; the
+verdict was not.
+
+Which is the argument for splitting them, arriving by itself: the valuable thing
+was the recorded decision all along, and forcing every verdict to also produce a
+binding sentence is what filled that canon with junk.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
