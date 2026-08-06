@@ -890,6 +890,52 @@ happened.
 
 ---
 
+## The most-viewed file in the repository
+
+`docs/stet.gif` is the README hero. It was recorded before the live preview
+worked, before the address was withheld, before `.liveframe` existed and before
+the one-line ask — so the first thing anyone saw was a tool that no longer
+matched its own screenshots.
+
+`stet demo` made re-recording it a two-minute job instead of a setup exercise,
+which is most of the argument for having built it.
+
+Six beats: the question; both signup flows running side by side; picked and
+reasoned while still blind; the reveal with the rule and `synced → AGENTS.md`;
+on to the next decision with the canon at 1.
+
+Three things worth writing down.
+
+**The recorder's defaults are for demos, not products.** Click indicators,
+action labels, a progress bar and a Claude watermark, all on by default. Fine
+for showing someone what an agent did; wrong on a repository's front page. All
+off.
+
+**A synthetic click does not land where a real one does.** Trying to click
+*Continue* inside a live variant to prove the frames are interactive, the click
+went to stet's own column picker instead — selecting B and typing the email
+address into the reason field. A real mouse click is captured by the iframe;
+the automation's is not. Not a product bug, but it cost a take, and it is worth
+knowing that "click through it" cannot be demonstrated by a script.
+
+**Six frames is a story, not a stutter.** The recorder captures one frame per
+action, so a six-action sequence is six frames — against 211 in the old one.
+Rather than manufacture motion, the frames were re-timed with ffmpeg through a
+concat list, holding the reveal for 3.6 seconds because it is the frame that
+carries the whole argument and 0.8 seconds is not long enough to read it.
+
+Then the size question, which had a better answer than the obvious one.
+Downscaling to the old 1100px looked like the way to keep the file small — 341KB
+against 792KB. But GitHub renders a README image at about 830 CSS pixels, and on
+a retina display a wider source renders at higher density rather than being
+thrown away. At 96 colours the full 1520px encode lands at **531KB — byte for
+byte what the old one cost**, at native resolution, with no visible banding in
+the dark interface.
+
+Same budget, sharper picture, and it shows what the tool actually does now.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.

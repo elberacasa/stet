@@ -6,7 +6,7 @@
 > a change, and the author writes `stet` in the margin to overrule it and make
 > the original final.
 
-![stet — flip two variants in the same frame, commit a verdict, and watch it become a rule every agent obeys](docs/stet.gif)
+![stet — two signup flows running side by side, judged blind; the verdict reveals which was which and becomes a rule every agent obeys](docs/stet.gif)
 
 ```bash
 npx stetmark demo     # seven real decisions to judge, right now, in a scratch copy
