@@ -1374,7 +1374,7 @@ function help(): void {
   out(`
   ${warm('stet')} ${dim('— let it stand.')}  ${dim(VERSION())}
 
-  Your agents ask once. Your answer stands.
+  What this repo taught, delivered when it matters.
 
   ${cool('stet')}                        start it here: serve the decision page, watch, notify
   ${dim('                            (also: stet serve — first run initialises and wires)')}
@@ -1394,7 +1394,7 @@ function help(): void {
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
   ${cool('stet rule edit')} <n> "<line>"  sharpen a rule's wording later
   ${cool('stet rule remove')} <n>        delete a rule from the canon
-  ${cool('stet note')} "<fact>" --globs   record what this repo taught, delivered where it applies
+  ${cool('stet note')} "<fact>" --globs   record what this repo taught — an agent writes these
   ${cool('stet notes')}                    print them  ${dim('·')}  ${cool('stet note remove')} <n>
   ${cool('stet method')} [--list]        install the method canon — eight rules, each
   ${dim('                            earned from a recorded failure in stet\'s own build')}

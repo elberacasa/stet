@@ -2291,6 +2291,72 @@ common failure, and the next honest thing to work on.
 
 ---
 
+## What it turned out to be
+
+Two numbers, counted rather than argued:
+
+```
+1,813 lines   the decision screen   →  5 decisions ever, 1 usable rule
+1,820 lines   the memory layer      →  worked every time it ran
+```
+
+The decision screen is not broken. It is careful, tested, and beautiful, and it
+is for a situation that turns out to be rare: forks worth stopping a human for
+are much less common than assumed, and agents reliably ask about the wrong ones.
+Three live previews of three genuinely different mechanisms produced *"i dont
+see a difference between abc"*. No amount of validation fixes that.
+
+Meanwhile notes went in eleven releases ago, almost as a side thought, and are
+the only part of this tool a stranger's agent picked up unprompted, used
+correctly, twice, in a project that had nothing to do with stet — and the second
+time it recognised its own note and avoided repeating a bug it had already paid
+for.
+
+So the product was renamed to the thing that works.
+
+> **Claude Code forgets what your codebase taught it. stet remembers, and tells
+> the next agent at the moment it matters.**
+
+Nothing was deleted. The decision screen is a section rather than the identity,
+and the gate stays for the rare real fork. What changed is which half the front
+page, the help text and the agent brief lead with.
+
+### The one substantive change: notes arrive on read
+
+They only ever arrived when an agent *wrote* a file. That is the right moment
+for a rule, which constrains a change — but a note is a fact about the code, and
+by the time an agent is editing it has already decided what to do. Told while it
+is still working out what the file is, the fact can still change the plan.
+
+`PreToolUse` now matches `Read` as well, and the asymmetry is deliberate:
+
+- **reading** delivers notes, and nothing else. No rules, and **never a denial**
+  — gating writes into an undecided path is the point; refusing to let anyone
+  *look* at it would be a different tool.
+- **writing** is unchanged: the gate, then the rules, then the notes.
+
+It costs 55ms on each file an agent opens — around two seconds across a session
+of forty reads, against turns measured in tens of seconds. Measured, not
+estimated, and stated here because "it does not make Claude Code slower" is a
+claim like any other.
+
+### What the agent is told first
+
+The brief in `AGENTS.md` and at `SessionStart` used to open with how to ask.
+It opens with how to record now, because that is the thing an agent will do
+several times a day, and asking is the thing it should do rarely:
+
+> When this repo teaches you something that was not obvious from reading it —
+> a second copy of a function, a footgun, a constraint you had to discover the
+> hard way — write it down. It is the half you are best at: you cannot decide
+> what the human likes, but nobody is better placed to say what just cost an
+> hour.
+
+That last sentence is the whole division of labour, and it took sixty findings
+and five judged decisions to be able to write it honestly.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.

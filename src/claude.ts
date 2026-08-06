@@ -57,9 +57,9 @@ interface Wiring {
 export const WIRING: Wiring[] = [
   {
     event: 'PreToolUse',
-    matcher: 'Write|Edit|MultiEdit|NotebookEdit',
+    matcher: 'Write|Edit|MultiEdit|NotebookEdit|Read|NotebookRead',
     arg: 'pre-tool-use',
-    why: 'denies writes into a path an undecided question claims, and delivers the rules for that path',
+    why: 'tells you what this repo learned about a file when you open it, and denies writes into a path an undecided question claims',
   },
   {
     event: 'PostToolUse',

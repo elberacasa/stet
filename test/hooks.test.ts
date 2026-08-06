@@ -757,3 +757,53 @@ describe('what the human actually said', () => {
     expect(rec.x).toBe('first line second line with spaces');
   });
 });
+
+// ── what the repo knows, delivered when a file is opened ───────────────────
+describe('notes on read', () => {
+  const read = (file: string, session = 'r1') =>
+    preToolUse(root, { session_id: session, cwd: root, tool_name: 'Read', tool_input: { file_path: path.join(root, file) } });
+
+  it('arrives when an agent opens the file, not only when it edits', () => {
+    // A rule constrains a change and belongs at the change. A note is a fact
+    // about the code, and by the time an agent is editing it has already
+    // decided what to do. Told while it is still reading, the fact can still
+    // change the plan.
+    appendNote(root, 'this file holds the second copy of the quality check', ['src/**']);
+    const ctx = read('src/page.ts')?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('second copy of the quality check');
+  });
+
+  it('never denies a read, even on a path a decision has claimed', () => {
+    // Gating writes into an undecided path is the point. Refusing to let
+    // anyone look at it would be a different tool.
+    addItem(root, {
+      id: 'layout', question: 'Which layout?', globs: ['src/**'],
+      map: { A: 'grid', B: 'stack' },
+      variants: [{ label: 'A', blocks: [] }, { label: 'B', blocks: [] }],
+    } as never);
+    expect(read('src/page.ts', 'r2')?.hookSpecificOutput?.permissionDecision).toBeUndefined();
+    const write = preToolUse(root, {
+      session_id: 'r2', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'src/page.ts'), old_string: 'a', new_string: 'b' },
+    });
+    expect(write?.hookSpecificOutput?.permissionDecision, 'writing it still is').toBe('deny');
+  });
+
+  it('does not deliver rules on a read — a rule is about a change', () => {
+    appendDirectRule(root, 'never centre the hero', { globs: ['src/**'] });
+    const ctx = read('src/hero.tsx', 'r3')?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).not.toContain('never centre the hero');
+  });
+
+  it('says a note once, whether it was read or written', () => {
+    appendNote(root, 'the provenance line is parsed to the next label, not the next stop', ['src/**']);
+    expect(read('src/rules.ts', 'r4')).toBeTruthy();
+    expect(read('src/rules.ts', 'r4'), 'not on every open').toBeNull();
+  });
+
+  it('is wired for the tools that read', () => {
+    const pre = WIRING.find((w) => w.arg === 'pre-tool-use');
+    expect(pre?.matcher).toContain('Read');
+    expect(pre?.matcher, 'and still for the ones that write').toContain('Edit');
+  });
+});

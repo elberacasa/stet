@@ -393,21 +393,24 @@ function globOverlaps(a: string, b: string): boolean {
  * file that may never be read.
  */
 export const HOW_TO_ASK = [
+  'When this repo teaches you something that was not obvious from reading it —',
+  'a second copy of a function, a footgun, a constraint you had to discover the',
+  'hard way — write it down. It is delivered to whoever opens that file next,',
+  'and it is the half you are best at: you cannot decide what the human likes,',
+  'but nobody is better placed to say what just cost an hour.',
+  '',
+  '  stet note "<the fact>" --globs \'src/thing.ts\'',
+  '',
   'At a fork this canon does not cover, where both options work and taste decides',
   '(design, copy, layout, naming, tone), do not pick for the human. Ask:',
   '',
   '  stet ask "Which empty state?" "Nothing here yet" "Start a project" --wait',
   '  stet ask "Which hero?" --url localhost:5173/a --url localhost:5173/b --wait',
   '',
-  '--wait blocks until a human rules, then prints the verdict; blocking beats a',
+  'Show the thing, not a description of it — a colour or a layout cannot be',
+  'judged as a sentence. --wait blocks until a human rules; blocking beats a',
   'guess that costs a rebuild. To keep working meanwhile, drop --wait and add',
   "--globs 'src/hero/**' — writes there are denied until the verdict.",
-  '',
-  'When this repo teaches you something that was not obvious from reading it —',
-  'a second copy of a function, a footgun, a constraint you had to discover —',
-  'record it so nobody relearns it. You may write these; only a human writes rules:',
-  '',
-  '  stet note "<the fact>" --globs \'src/thing.ts\'',
 ].join('\n');
 
 function preamble(): string {

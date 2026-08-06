@@ -1,60 +1,55 @@
 # stet
 
-**Claude Code cannot be told to stop guessing. It can be stopped.**
+**Claude Code forgets what your codebase taught it. stet remembers, and tells
+the next agent at the moment it matters.**
 
-Your agent hits a fork with no right answer — which type, which copy, modal or
-page — and it does what it was trained to do: it picks one and keeps going. You
-find out three hours later. stet turns that fork into a *denied tool call*, puts
-the two options in front of you as the real running thing, and turns your answer
-into a rule every future agent obeys without asking.
-
-> `stet` — Latin, *"let it stand."* The proofreader's mark: an editor proposes
-> a change, and the author writes `stet` in the margin to overrule it and make
-> the original final.
-
-![stet — two signup flows running side by side, judged blind; the verdict reveals which was which and becomes a rule every agent obeys](docs/stet.gif)
+Every session, an agent works something out the hard way — this file holds a
+second copy of that function, this transition dies in a background tab, these
+globs are relative to the root and not to you. Then the session ends and it is
+gone. The next agent pays for it again. So do you.
 
 ```bash
-npx stetmark@latest demo
+stet note "the fuse ticks have no CSS transitions on purpose — Chrome freezes
+           them in a background tab and a tick strands mid-colour" --globs 'index.html'
 ```
 
-Seven real decisions, judged blind, in about ten seconds. Nothing is installed,
-nothing in your repo is touched.
+Next time anyone opens that file:
 
 ```
-⏺ Update(src/components/DeleteButton.tsx)
-  ⎿  Error: stet: this path is governed by a decision the human has not made yet.
-
-     delete-confirm — "Modal or inline undo?"
-     claims: src/components/**
-
-     Do not implement either option yet — whichever you pick has a 50% chance of
-     being thrown away. Either work somewhere else, or block on the verdict with:
-       stet await delete-confirm
+PreToolUse:Read — stet notes for index.html — learned here, not obvious from the code:
+· the fuse ticks have no CSS transitions on purpose — Chrome freezes them in a
+  background tab and a tick strands mid-colour
 ```
 
-**Every other human-in-the-loop tool writes a sentence into a file and hopes.**
-`CLAUDE.md`, `AGENTS.md`, memory, rules files — all of them are suggestions,
-read once at the top of a session, competing with every token that arrives
-after. An instruction can be ignored. A denied tool call cannot.
+Not a document somebody has to remember to read. A system reminder, scoped to
+the file, delivered at the moment an agent opens it, once per session.
+
+**An agent writes those.** It is the half an agent is actually good at: it
+cannot decide what you like, but it is the best possible author of *here is what
+just cost me an hour*.
+
+```bash
+npx stetmark@latest demo   # the whole thing on real material, in a scratch copy
+```
 
 Built for Claude Code: six hooks, two slash commands. Zero runtime dependencies,
 no account, no key, and nothing ever leaves your machine.
 
 ---
 
-## Install
+## Three kinds of memory
 
-```bash
-npm i -g stetmark     # then the command is just: stet
-stet                  # run it in any repo — first run initialises and wires
-```
+|  | what it is | who writes it | when it arrives |
+|---|---|---|---|
+| **notes** | a fact about the code | an agent, as it learns | opening or editing that file |
+| **rules** | a verdict you gave | only you | editing a matching file, or session start |
+| **the gate** | a question not yet answered | an agent, when it needs you | it refuses the write until you rule |
 
-Pin `@latest` on any `npx` form. `npx stetmark` will happily run whatever version
-npm cached on that machine months ago, and a first run that fails because the
-binary predates the command you typed is the worst possible introduction — it
-happened to the first person who tried it. stet never talks to the network, so it
-cannot tell you it is stale.
+The first is the one you will use every day. The second is what stops you
+re-answering the same question every week. The third is for the rare fork where
+guessing costs a rebuild.
+
+---
 
 ## The problem
 

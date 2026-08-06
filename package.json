@@ -1,7 +1,7 @@
 {
   "name": "stetmark",
-  "version": "0.35.0",
-  "description": "stet — let it stand. Your agents ask once, your answer stands. A local verdict gate that turns your taste into rules coding agents obey.",
+  "version": "0.36.0",
+  "description": "What your codebase taught, delivered to the next agent at the moment it matters. For Claude Code.",
   "keywords": [
     "ai",
     "agents",

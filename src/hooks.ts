@@ -65,6 +65,18 @@ export interface HookOutput {
 }
 
 const WRITE_TOOLS = /^(Write|Edit|MultiEdit|NotebookEdit)$/;
+/**
+ * Reading is where a note earns its keep. A rule constrains a change, so it
+ * belongs at the moment of the change. A note is a fact about the code — that
+ * this file holds the second copy of something, that a transition here will
+ * strand in a background tab — and by the time an agent is editing, it has
+ * already decided what to do. Told while it is still working out what the file
+ * is, the fact can still change the plan.
+ *
+ * Nothing is ever denied on a read. A pending decision gates writes into a
+ * path; refusing to let anyone look at it would be a different tool.
+ */
+const READ_TOOLS = /^(Read|NotebookRead)$/;
 
 /** The path a write-shaped tool call is aimed at, repo-relative. */
 export function targetPath(root: string, input: HookInput): string | null {
@@ -276,9 +288,26 @@ function dueFor(root: string, rel: string | null, id: string | undefined, budget
 }
 
 export function preToolUse(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
-  if (!WRITE_TOOLS.test(input.tool_name ?? '')) return null;
+  const tool = input.tool_name ?? '';
+  const writing = WRITE_TOOLS.test(tool);
+  if (!writing && !READ_TOOLS.test(tool)) return null;
   const rel = targetPath(root, input);
   if (rel === null) return null;
+
+  // Opening a file to understand it: say what this repo learned here, and
+  // nothing else. No gate, no rules — a rule is about a change being made.
+  if (!writing) {
+    const only = notesFor(root, rel, input.session_id);
+    if (!only.length) return null;
+    for (const n of only) append(root, input.session_id, { t: 'n', n: n.n });
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        additionalContext: [`stet notes for ${rel} — learned here, not obvious from the code:`,
+          ...only.map((n) => `· ${n.text}`)].join('\n'),
+      },
+    };
+  }
 
   const blocked = blockingDecisions(root, rel);
   if (blocked.length) {
