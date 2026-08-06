@@ -13,6 +13,8 @@ export interface Paths {
   pending: string;
   decided: string;
   rules: string;
+  /** What working here taught, as opposed to what its owner decided. */
+  notes: string;
 }
 
 /** Nearest ancestor holding a .stet/, else cwd. */
@@ -34,6 +36,7 @@ export function paths(root: string): Paths {
     pending: path.join(stet, 'pending'),
     decided: path.join(stet, 'decided'),
     rules: path.join(stet, 'RULES.md'),
+    notes: path.join(stet, 'NOTES.md'),
   };
 }
 

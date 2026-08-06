@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { matchesAny } from './glob.js';
 import { DEFAULT_BUDGET, readRules, renderRule, selectRules } from './rules.js';
+import { readNotes, type Note } from './notes.js';
 import { listEntries, paths } from './store.js';
 import type { Rule } from './types.js';
 
@@ -33,6 +34,8 @@ export interface HookInput {
 /** What one session has been told, and what it has been made to redo. */
 interface Session {
   injected: number[];
+  /** Note numbers already shown this session. Separate from `injected`. */
+  notesSeen: number[];
   /** repo-relative path → the distinct prompts that caused a write to it */
   edits: Record<string, string[]>;
   /** paths already surfaced as churn, so it is said once */
@@ -81,7 +84,7 @@ function sessionFile(root: string, id: string): string {
   return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.jsonl`);
 }
 
-type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string };
+type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string } | { t: 'n'; n: number };
 
 function append(root: string, id: string | undefined, rec: Record_): void {
   if (!id) return;
@@ -100,7 +103,7 @@ function append(root: string, id: string | undefined, rec: Record_): void {
  * every other session read in the same process.
  */
 function blank(): Session {
-  return { injected: [], edits: {}, flagged: [], at: 0 };
+  return { injected: [], notesSeen: [], edits: {}, flagged: [], at: 0 };
 }
 
 /** Folds the log. Unparseable lines are skipped — a half-written record must
@@ -129,9 +132,14 @@ export function loadSession(root: string, id: string | undefined): Session {
       if (!s.injected.includes(r.n)) s.injected.push(r.n);
     } else if (r.t === 'f' && typeof r.p === 'string') {
       if (!s.flagged.includes(r.p)) s.flagged.push(r.p);
+    } else if (r.t === 'n' && Number.isInteger(r.n)) {
+      // Numbered separately from rules: both start at 1 and they are different
+      // things, so one namespace would silently suppress the other.
+      if (!s.notesSeen.includes(r.n)) s.notesSeen.push(r.n);
     }
   }
   s.injected.sort((a, b) => a - b);
+  s.notesSeen.sort((a, b) => a - b);
   return s;
 }
 
@@ -222,15 +230,42 @@ export function preToolUse(root: string, input: HookInput, budget = DEFAULT_BUDG
   }
 
   const due = dueFor(root, rel, input.session_id, budget);
-  if (!due.length) return null;
-  remember(root, input.session_id, due.map((r) => r.n));
+  const notes = notesFor(root, rel, input.session_id);
+  if (!due.length && !notes.length) return null;
+
+  const parts: string[] = [];
+  if (due.length) {
+    remember(root, input.session_id, due.map((r) => r.n));
+    parts.push(stateBlock(due, `stet rules that govern ${rel} — binding, already decided by this repo's owner:`));
+  }
+  if (notes.length) {
+    for (const n of notes) append(root, input.session_id, { t: 'n', n: n.n });
+    parts.push(
+      [`stet notes for ${rel} — learned here, not obvious from the code:`, ...notes.map((n) => `· ${n.text}`)].join('\n'),
+    );
+  }
   return {
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      additionalContext: stateBlock(due, `stet rules that govern ${rel} — binding, already decided by this repo's owner:`),
-    },
+    hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: parts.join('\n\n') },
   };
 }
+
+/**
+ * Notes matching this path that this session has not been shown.
+ *
+ * Rules are selected first and against the full budget; notes take what is left
+ * and never more than a handful. A landmine is worth saying once — a rule is
+ * binding, and if the two ever compete for room the binding one wins.
+ */
+function notesFor(root: string, rel: string | null, id: string | undefined): Note[] {
+  if (rel === null) return [];
+  const already = new Set(loadSession(root, id).notesSeen);
+  return readNotes(root)
+    .filter((n) => !already.has(n.n) && n.globs.length && matchesAny(n.globs, rel))
+    .slice(0, MAX_NOTES);
+}
+
+/** Enough to warn, not enough to become the thing people skip. */
+const MAX_NOTES = 4;
 
 /** Everything unscoped, once per session. Also how the canon survives compaction. */
 export function canonOnce(root: string, input: HookInput, event: string, budget = DEFAULT_BUDGET): HookOutput | null {

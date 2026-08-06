@@ -390,6 +390,13 @@ function preamble(): string {
     '--wait blocks until a human rules, then prints the verdict; blocking beats a',
     'guess that costs a rebuild. To keep working meanwhile, drop --wait and add',
     "--globs 'src/hero/**' — writes there are denied until the verdict.",
+    '',
+    'When this repo teaches you something that was not obvious from reading it —',
+    'a second copy of a function, a footgun, a constraint you had to discover —',
+    'record it so nobody relearns it. You may write these; only a human writes rules:',
+    '',
+    '  stet note "<the fact>" --globs \'src/thing.ts\'',
+    '',
     // The wiring is per-developer, so nothing checked in can tell a teammate
     // it is missing. This line can, and it costs about twenty tokens once.
     'If `stet claude status` says unwired, tell the human to run `stet claude`.',

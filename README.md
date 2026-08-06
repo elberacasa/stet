@@ -313,6 +313,58 @@ stet undo hero-type    # or a particular one — it goes back in the queue
 stet rule remove 4     # delete a rule outright; the others keep their numbers
 ```
 
+## Notes: what the codebase taught
+
+The canon holds verdicts — things a human decided. There is another kind of
+knowledge a repository accumulates, and stet had nowhere to put it:
+
+> `weakness()` exists twice; the page has its own copy and no imports.
+> `absorbAsset` covers `image` and `audio` only.
+> `Number(v) || undefined` eats a legitimate `0`.
+> Globs are relative to the project root, not to where you're standing.
+
+Those aren't preferences. Nobody chose them. They're **landmines** — invisible
+from the code, expensive to learn, and cheap to state once known.
+
+```bash
+stet note "the second copy of weakness() is here; rules.ts has the other" --globs 'src/page.ts'
+```
+
+Delivered exactly like a scoped rule — as a system reminder, at the moment
+somebody edits that file, once per session:
+
+```
+stet rules that govern src/page.ts — binding, already decided by this repo's owner:
+1. never centre the hero
+
+stet notes for src/page.ts — learned here, not obvious from the code:
+· the second copy of weakness() is here; rules.ts has the other
+· no backticks inside the PAGE template literal — it breaks the build
+```
+
+|  | **rules** | **notes** |
+|---|---|---|
+| what it is | a preference | a fact |
+| who writes it | **only a human**, after a verdict | **an agent**, the moment it learns one |
+| force | binding | informational |
+
+That second row is the point. An agent cannot decide taste — that is the whole
+premise of this tool. But an agent is the best possible author of *"here is what
+just cost me an hour"*, and a note is the half it can legitimately write.
+
+Rules are always selected first and against the full budget; notes take what is
+left, capped at four. If the two ever compete for room, the binding one wins.
+Scope is required — a note with nowhere to arrive is a document, and documents
+are exactly what this replaces.
+
+**Why this exists:** three of the 45 bugs in stet's own build log are bugs that
+had already been fixed *and written up* before being written again — a
+lazy-loaded element inside a collapsed box, a listener attached after the event
+it waits for, and identity inferred from content that varies. The write-up
+existed every time. It was in a document, and a document is never delivered at
+the moment of the edit. This repo now ships its own
+[`.stet/NOTES.md`](.stet/NOTES.md).
+
 ## The method canon
 
 Taste is not the only thing that fails to compound. Method does too — and an

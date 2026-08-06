@@ -7,6 +7,7 @@ import { canonOnce, churn, EVENTS, loadSession, postToolUse, preCompact, preTool
 import { CLAUDE_EVENTS, install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
 import { addItem, init } from '../src/store.js';
 import { appendDirectRule, readRules } from '../src/rules.js';
+import { appendNote, readNotes, removeNote, thin } from '../src/notes.js';
 import { withLock } from '../src/lock.js';
 import { sync } from '../src/sync.js';
 
@@ -524,5 +525,78 @@ describe('taste said out loud', () => {
     const ctx = stop(root, { session_id: 'c1', cwd: root })?.hookSpecificOutput?.additionalContext ?? '';
     expect(ctx).toContain('src/components/Button.tsx');
     expect(ctx).toContain(`--globs 'src/components/**'`);
+  });
+});
+
+// ── notes: what the codebase taught, as opposed to what its owner decided ───
+describe('notes', () => {
+  it('arrives at the moment somebody touches what it is about', () => {
+    appendNote(root, 'the second copy of weakness() lives here; rules.ts has the other', ['src/page.ts']);
+    const ctx = preToolUse(root, {
+      session_id: 'n1', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'src/page.ts'), old_string: 'a', new_string: 'b' },
+    })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('second copy of weakness()');
+    expect(ctx).toContain('learned here, not obvious from the code');
+  });
+
+  it('says it once per session', () => {
+    appendNote(root, 'no backticks inside the PAGE template literal — it breaks the build', ['src/page.ts']);
+    const write = () => preToolUse(root, {
+      session_id: 'n2', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'src/page.ts'), old_string: 'a', new_string: 'b' },
+    });
+    expect(write()).toBeTruthy();
+    expect(write(), 'a note repeated on every write is a note people skip').toBeNull();
+  });
+
+  it('stays out of the way of files it is not about', () => {
+    appendNote(root, 'globs are relative to the project root, not to where you stand', ['src/page.ts']);
+    expect(preToolUse(root, {
+      session_id: 'n3', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'README.md'), old_string: 'a', new_string: 'b' },
+    })).toBeNull();
+  });
+
+  it('never displaces a rule, which is the binding half', () => {
+    appendDirectRule(root, 'never centre the hero', { globs: ['src/**'] });
+    for (let i = 0; i < 12; i++) appendNote(root, `a fact about this area number ${i} worth stating`, ['src/**']);
+    const ctx = preToolUse(root, {
+      session_id: 'n4', cwd: root, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, 'src/page.ts'), old_string: 'a', new_string: 'b' },
+    })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx.indexOf('binding')).toBeLessThan(ctx.indexOf('learned here'));
+    expect(ctx).toContain('never centre the hero');
+    expect((ctx.match(/^· /gm) ?? []).length, 'notes are capped so they cannot become the block people skip').toBeLessThanOrEqual(4);
+  });
+
+  it('reads its scope back intact, dots and all', () => {
+    // The provenance parser that mangled every dotted glob in RULES.md was
+    // copied in shape here; it must not be copied in bug.
+    const globs = ['package.json', '**/*.test.*', 'src/**/*.tsx'];
+    appendNote(root, 'a fact scoped to awkward globs, stated at length', globs);
+    expect(readNotes(root).at(-1)?.globs).toEqual(globs);
+  });
+
+  it('numbers survive a removal, like rules', () => {
+    appendNote(root, 'the first fact worth recording here', ['a/**']);
+    appendNote(root, 'the second fact worth recording here', ['b/**']);
+    appendNote(root, 'the third fact worth recording here', ['c/**']);
+    expect(removeNote(root, 2)?.text).toContain('second');
+    expect(readNotes(root).map((n) => n.n)).toEqual([1, 3]);
+    expect(removeNote(root, 99)).toBeNull();
+  });
+
+  it('refuses the ones that cost tokens and say nothing', () => {
+    for (const bad of ['be careful with this file', 'TODO fix this later', 'why does this break?', 'hmm']) {
+      expect(thin(bad), bad).not.toBeNull();
+    }
+    for (const good of [
+      'the second copy of weakness() lives here; rules.ts has the other',
+      'globs are relative to the project root, not to where you are standing',
+      'absorbAsset covers image and audio only — url is handled separately',
+    ]) {
+      expect(thin(good), good).toBeNull();
+    }
   });
 });

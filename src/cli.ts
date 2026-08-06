@@ -11,6 +11,7 @@ import { notify, open } from './notify.js';
 // server.ts pulls in the 39KB page document. The hook path runs on every tool
 // call, so it is imported lazily and only by the command that serves.
 import { addItem, findEntry, findRoot, init, lastDecided, listEntries, paths, undecide, validId } from './store.js';
+import { appendNote, readNotes, removeNote, thin } from './notes.js';
 import { assertItem } from './validate.js';
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
@@ -93,6 +94,8 @@ const FLAGS: Record<string, string[]> = {
   undo: [],
   status: ['json'],
   method: ['list'],
+  note: ['globs'],
+  notes: [],
   init: [],
   schema: [],
   version: [],
@@ -193,6 +196,10 @@ async function main(): Promise<void> {
       return status();
     case 'method':
       return method();
+    case 'note':
+      return note();
+    case 'notes':
+      return printNotes();
     case 'version':
     case '-v':
       return out(VERSION());
@@ -1054,6 +1061,66 @@ async function method(): Promise<void> {
   out();
 }
 
+/**
+ * Record a fact this repository taught, scoped to where it applies.
+ *
+ * The half of the canon an agent may legitimately write. It cannot decide taste
+ * — that is the whole premise — but it is the best possible author of "this is
+ * what just cost me an hour", and until now there was nowhere to put that which
+ * would ever be read again.
+ */
+function note(): void {
+  if (args.rest[0] === 'remove') {
+    const n = Number(args.rest[1]);
+    if (!Number.isInteger(n)) throw new Error('usage: stet note remove <n>   (see `stet notes`)');
+    const gone = removeNote(root, n);
+    if (!gone) throw new Error(`there is no note ${n} — run \`stet notes\` to see what there is`);
+    return out(`  ${cool('removed')} ${dim(`note ${n} —`)} ${gone.text}`);
+  }
+
+  const text = args.rest.join(' ').trim();
+  if (!text) {
+    throw new Error(
+      'usage: stet note "<what you learned>" --globs \'src/page.ts\'\n' +
+        '       a fact about the code, not a preference — a preference is `stet rule`',
+    );
+  }
+  // Scope is required, and that is the point. A note earns its keep by arriving
+  // at the moment somebody touches the thing it is about; one with no place to
+  // arrive is a document, and documents are what this failed to be three times.
+  const globs = typeof args.flags.globs === 'string'
+    ? args.flags.globs.split(',').map((g) => g.trim()).filter(Boolean)
+    : [];
+  if (!globs.length) {
+    throw new Error(
+      'a note needs --globs: it is delivered when somebody touches that path.\n' +
+        '       stet note "the second copy of weakness() is here" --globs \'src/page.ts\'',
+    );
+  }
+  const weak = thin(text);
+  if (weak) throw new Error(`${weak}\n       got: ${JSON.stringify(text)}`);
+
+  init(root);
+  const added = appendNote(root, text, globs);
+  out(`  ${warm(String(added.n))}  ${added.text}`);
+  out(dim(`  arrives when an agent touches ${globs.join(', ')}`));
+}
+
+function printNotes(): void {
+  const notes = readNotes(root);
+  if (!notes.length) {
+    out(dim('  nothing recorded yet'));
+    out(dim('  stet note "<what you learned>" --globs \'src/thing.ts\''));
+    return;
+  }
+  for (const n of notes) {
+    out(`${warm(String(n.n).padStart(3))}  ${n.text}`);
+    out(`     ${dim(`${n.globs.join(' ')}${n.learned ? `  ·  ${n.learned}` : ''}`)}`);
+  }
+  out();
+  out(dim(`  ${notes.length} note${notes.length === 1 ? '' : 's'}. these are facts, not verdicts — nothing here is binding.`));
+}
+
 function undo(): void {
   const id = args.rest[0] ?? lastDecided(root)?.id;
   if (!id) throw new Error('nothing has been decided yet');
@@ -1124,6 +1191,8 @@ function help(): void {
   ${cool('stet rule')} "<one line>"      record a correction straight into the canon
   ${dim('        [--globs src/web/**]')}   ${dim('scoped: arrives at the moment of a matching write')}
   ${cool('stet rule remove')} <n>        delete a rule from the canon
+  ${cool('stet note')} "<fact>" --globs   record what this repo taught, delivered where it applies
+  ${cool('stet notes')}                    print them  ${dim('·')}  ${cool('stet note remove')} <n>
   ${cool('stet method')} [--list]        install the method canon — eight rules, each
   ${dim('                            earned from a recorded failure in stet\'s own build')}
   ${cool('stet rules')} [--tag design]   print the canon

@@ -1394,6 +1394,105 @@ at a real path and read what came back.
 
 ---
 
+## The half that was missing
+
+Asked what stet was still missing, I went back through all forty-five findings
+with one question: what would have had to exist, at what moment, for that time
+not to be lost?
+
+The answer was not a feature I expected. Three of the forty-five are bugs that
+had **already been fixed, written up, and then written again**:
+
+- **20** — `loading="lazy"` collapsing to 0×0 was fixed for `<img>`, documented,
+  and then reached for again on `<iframe>` a release later. The note in this log
+  at the time: *"The lesson did not transfer, because I had filed it as a fact
+  about images rather than a fact about deferred loading."*
+- **31** — a check-then-watch race was closed inside `stet await`, then
+  reproduced exactly in the harness that guards the release.
+- **42** — identity inferred from content that varies, which is the same shape
+  as 1 and 23. Three times. *"the version-skew failure again, in a new costume."*
+
+Every one of them was written down. This log is fourteen hundred lines and it
+has never once arrived at the moment it was needed.
+
+Counting the rest the same way: **twenty-six of the forty-five were facts about
+this codebase** — invisible from reading it, expensive to learn, cheap to state
+once known. `weakness()` exists twice. `absorbAsset` covers image and audio
+only. `Number(v) || undefined` eats a legitimate zero. Pending items sort by
+`created` and same-millisecond ties fall back to id.
+
+None of those are taste. No human decided any of them. And stet — a tool whose
+entire architecture is *deliver the right sentence at the moment it applies* —
+had nowhere to put them.
+
+### The shape
+
+```bash
+stet note "the second copy of weakness() is here; rules.ts has the other" --globs 'src/page.ts'
+```
+
+Stored in `.stet/NOTES.md`, selected by glob, injected at `PreToolUse` beside
+the rules, once per session:
+
+```
+stet rules that govern src/page.ts — binding, already decided by this repo's owner:
+1. never centre the hero
+
+stet notes for src/page.ts — learned here, not obvious from the code:
+· the second copy of weakness() is here; rules.ts has the other
+· no backticks inside the PAGE template literal — it breaks the build
+```
+
+The division is the interesting part, and it falls out of stet's own premise:
+
+|  | rules | notes |
+|---|---|---|
+| what | a preference | a fact |
+| who writes | only a human, after a verdict | an agent, the moment it learns one |
+| force | binding | informational |
+
+An agent cannot decide taste — that is why this tool exists. But an agent is the
+best possible author of *"this is what just cost me an hour"*, and that half had
+nowhere to go. Notes are the part of the canon an agent may legitimately write.
+
+### Four decisions worth recording
+
+**Scope is required.** A note with no globs has nowhere to arrive, which makes
+it a document — and documents are precisely what failed three times above. The
+error says so rather than defaulting to repo-wide.
+
+**Rules are selected first, against the full budget; notes take what is left,
+capped at four.** If they ever compete for room the binding one wins, and a
+block of twelve notes is a block people learn to skip.
+
+**Notes are numbered separately from rules**, with their own per-session
+delivered-set. Both start at 1, and one shared namespace would have had rule 3
+silently suppressing note 3 — a bug that would have been invisible and very hard
+to find.
+
+**The quality check is deliberately lighter than the one for rules.** A note is
+allowed to be dull; it is only not allowed to be empty. `be careful with this
+file`, `TODO fix later` and anything with a question mark are refused, because
+those cost the same tokens as a fact and teach the reader to skim. Everything
+else passes — finding 29 is a standing reminder of what an over-eager warning
+costs.
+
+### And the parser that had just been fixed
+
+The provenance line in `NOTES.md` has the same shape as the one in `RULES.md`,
+which meant it was a candidate to inherit finding 45 — the `[^.]*` that
+truncated every glob containing a full stop. It was written the corrected way
+from the start, and there is a test asserting `package.json`, `**/*.test.*` and
+`src/**/*.tsx` all survive the round trip.
+
+Which is itself the argument for this feature: that bug was fixed forty minutes
+earlier, and the only reason it did not immediately reappear in a new file is
+that it was still in working memory. It is now note 4 in this repo's own
+`.stet/NOTES.md`, scoped to `src/rules.ts` and `src/notes.ts`, so it will not
+depend on that next time.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
