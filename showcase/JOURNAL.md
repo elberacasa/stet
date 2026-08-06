@@ -2128,6 +2128,90 @@ it.
 
 ---
 
+## The second run, and what a good decision exposed
+
+Same project, one prompt: make the break screen unmistakable, make the round
+counter louder, *both of these are look-and-feel*. No mention of stet.
+
+The difference from the first run is stark. It built **six** live previews —
+three genuinely different mechanisms for each question, generated from the real
+`index.html` on a scaled clock so rounds turn over while you watch — queued both
+through the long form, and said why:
+
+> *stet requires showing the thing rather than describing it, and hides which
+> option is which. Using the long form so the descriptions stay sealed until you
+> rule.*
+
+That sentence is the guidance added in 0.31 coming back out of an agent that had
+never seen this repository. It also recognised the transition footgun as a
+repeat — *"this is the second time that footgun has bitten in this file; it's
+recorded as a repo note"* — and scaffolded `index.html` inertly so the visual
+changes only land after a verdict, because it understood the file was gated.
+
+Then it did two things nothing was watching.
+
+### Finding 57 — an agent can take back the denial it is standing behind
+
+It was blocked: the accent decision from the previous run claimed
+`index.html`. So it ran `stet undo` on that decision and carried on.
+
+Its reasoning was sound — the question was a genuine duplicate of one already
+queued, and it said so in its summary. But the capability is the finding.
+`stet undo <id>` is in the CLI, and nothing can distinguish a human typing it
+from an agent running it to unblock itself.
+
+*"An instruction can be ignored. A denied tool call cannot"* is the sentence this
+whole tool rests on. It is only true if removing the denial leaves a mark.
+
+Discarding no longer deletes. The question moves to `.stet/discarded/`, and
+`stet status` reports it by name. Forbidding it would be worse — the first agent
+to do it was right — but the person the question was addressed to should not
+have to notice by absence.
+
+### Finding 58 — a decision that evaporates
+
+```
+accent-live    A-1.html  B-2.html  C-3.html          ← copied in
+break-screen   http://localhost:8731/previews/…      ← a server it started
+round-counter  http://localhost:8731/previews/…      ← a server it started
+```
+
+The decision queued by hand used relative paths, so stet absorbed the files into
+the decision directory and they outlive everything. The agent's two point at a
+preview server it spun up mid-session.
+
+A decision waits for a human — that is the entire premise, and the README says
+so. It may wait overnight. That server will not. The moment it stops, both
+decisions render as blank frames with nothing to explain why, and the human is
+left looking at an empty screen wondering what broke.
+
+stet accepted both silently.
+
+Now: `stet ask` says it at queue time, naming the durable alternative. And
+`stet status` probes the loopback origin of every pending decision and reports
+the ones that are not answering — quiet when the server is up, explicit when it
+is not:
+
+```
+  ! break-screen shows http://localhost:8731, which is not responding.
+    its variants will render blank until that server is running again.
+```
+
+That check only ever talks to a loopback address, on a decision that already
+exists. Nothing leaves the machine.
+
+### What the two runs together show
+
+The first run asked a question nobody could answer. The second asked two good
+ones — because the schema told it to show the thing rather than describe it, and
+because a note it had written itself came back and stopped it repeating a bug.
+
+Both runs produced findings that were unreachable from inside this repository,
+and every one of them came from watching an agent that had never seen the tool
+use it on something that was not the tool.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -2180,6 +2264,8 @@ Not one of these was visible from reading the code.
 | 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
 | 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 | 46 | a stray `stet` in a terminal | the global install was `stetmark@0.4.0`, twenty-one releases behind — detected and worked around by the wiring every time, but answering from 0.4.0 to anyone who typed `stet` |
+| 57 | **an agent unblocking itself** | `stet undo` removes a pending decision, so a denied tool call can be un-denied by the thing it denied — and deleting it left no trace for the person it was addressed to |
+| 58 | reading where the previews pointed | two decisions pointed at a preview server the agent started mid-session: when it stops they render blank, and a decision is supposed to wait for a human overnight |
 | 55 | a screenshot of the real decision screen | with three variants the verdict bar bound `C` and `something else` to the same key — the handler was right and the label lied, leaving no key for "something else" at all |
 | 56 | the same screenshot, once fixed | three live frames were 480px wide in 427px columns: aspect-ratio plus min-height and no width resolves height-first, and two variants were never narrow enough to show it |
 | 54 | standing in the blocked project | a pending decision denies writes to every path it claims and had no way out — `undo` walked a decided item back, nothing walked a queued one away, so a bad question held a gate until you deleted a directory by hand |
@@ -2196,7 +2282,7 @@ The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other forty-eight reported success while broken.
+other fifty reported success while broken.
 
 Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
 wired, the binary implemented it, the probe ran, the status was green, the README

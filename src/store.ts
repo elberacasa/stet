@@ -15,6 +15,8 @@ export interface Paths {
   rules: string;
   /** What working here taught, as opposed to what its owner decided. */
   notes: string;
+  /** Questions taken back before anyone answered them. */
+  discarded: string;
 }
 
 /** Nearest ancestor holding a .stet/, else cwd. */
@@ -37,6 +39,7 @@ export function paths(root: string): Paths {
     decided: path.join(stet, 'decided'),
     rules: path.join(stet, 'RULES.md'),
     notes: path.join(stet, 'NOTES.md'),
+    discarded: path.join(stet, 'discarded'),
   };
 }
 
@@ -348,10 +351,20 @@ export function undecide(root: string, id: string): Item {
  * `undo` necessary in the first place.
  */
 export function drop(root: string, id: string): Item {
-  const dir = path.join(paths(root).pending, id);
+  const p = paths(root);
+  const dir = path.join(p.pending, id);
   const entry = readEntry(dir, 'pending');
   if (!entry.ok) throw new Error(`${id} is not a pending decision: ${entry.error}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Moved, not deleted. An agent that is blocked can discard the decision
+  // blocking it — `stet undo <id>` is in the CLI and nothing can tell a human
+  // typing it from an agent running it. That is not worth forbidding: the
+  // first agent to do it was right, it was a genuine duplicate. But "a denied
+  // tool call cannot be ignored" is only true if removing the denial leaves a
+  // mark, so the question survives where its owner can still see it.
+  fs.mkdirSync(p.discarded, { recursive: true });
+  const to = path.join(p.discarded, id);
+  fs.rmSync(to, { recursive: true, force: true });
+  fs.renameSync(dir, to);
   return entry.item;
 }
 

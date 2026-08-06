@@ -750,6 +750,7 @@ async function askShorthand(): Promise<void> {
 
   assertItem(item);
   warnUnmatchedGlobs(item);
+  warnTransientHosts(item);
   addItem(root, item, { shuffle: args.flags.shuffle !== 'false' });
   out(item.id);
   process.stderr.write(
@@ -794,6 +795,39 @@ function readOption(file: string): string {
   }
 }
 
+/** Loopback origins a variant points at — the ones that stop when you do. */
+function loopbackOrigins(item: Item): string[] {
+  const out = new Set<string>();
+  for (const v of item.variants ?? []) {
+    for (const b of (v.blocks ?? []) as { href?: string }[]) {
+      if (typeof b.href !== 'string') continue;
+      try {
+        const u = new URL(b.href);
+        if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/i.test(u.hostname)) out.add(u.origin);
+      } catch {
+        /* relative — stet copies those in, and they outlive everything */
+      }
+    }
+  }
+  return [...out];
+}
+
+/**
+ * A decision waits for a human, possibly for days. A variant pointing at a dev
+ * server does not: when that process stops, the frames render blank and nothing
+ * explains why. Variants given as relative paths are copied into the decision
+ * and outlive everything, which is the difference worth naming out loud.
+ */
+function warnTransientHosts(item: Item): void {
+  const origins = loopbackOrigins(item);
+  if (!origins.length) return;
+  process.stderr.write(
+    `stet: this decision points at ${origins.join(', ')}, which stops when that server does.\n` +
+      `      the human may judge it hours from now and see blank frames. keep it running,\n` +
+      `      or pass files stet can copy in — a relative path is absorbed into the decision.\n`,
+  );
+}
+
 function slug(s: string): string {
   const base = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
   return base || 'decision';
@@ -828,6 +862,7 @@ async function ask(): Promise<void> {
   // five things wrong learned about them one command at a time.
   assertItem(item);
   warnUnmatchedGlobs(item);
+  warnTransientHosts(item);
   const dir = addItem(root, item, { shuffle: args.flags.shuffle !== 'false' });
   const rel = path.relative(process.cwd(), dir) || dir;
   out(item.id);
@@ -880,6 +915,10 @@ function schema(): void {
   ${cool('Show the thing, not a description of it.')} A colour, a layout or a piece of
   interface cannot be judged as a sentence — use ${warm('--url')} or ${warm('--image')} so the
   human sees what you are actually asking about. Text options are for text.
+
+  ${cool('Give it files, not a server you are running.')} A relative path is copied into
+  the decision and outlives your session; ${dim('http://localhost:…')} stops when that
+  process does, and the human judging it tomorrow sees blank frames.
 
   ${cool('Never say which one is yours.')} No ${dim('"(current)"')}, no ${dim('"I picked X"')} in the
   question. The labels are shuffled precisely so the human cannot tell; a
@@ -1080,6 +1119,37 @@ async function status(): Promise<void> {
     for (const e of broken) out(`    ${warm(e.id.padEnd(w))}  ${dim(e.ok ? '' : e.error)}`);
   }
   out();
+  // A question that was taken back before anyone answered it. Surfaced because
+  // the likeliest author of that is an agent unblocking itself, and the person
+  // it was addressed to should not have to notice by absence.
+  let binned: string[] = [];
+  try {
+    binned = fs.readdirSync(paths(root).discarded, { withFileTypes: true })
+      .filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch {
+    /* none */
+  }
+  // Probing loopback only, on a decision that already exists: this is why the
+  // frames are blank, and nobody could otherwise tell.
+  for (const e of ok) {
+    if (!e.ok) continue;
+    for (const origin of loopbackOrigins(e.item)) {
+      const alive = await reachable(origin);
+      if (!alive) {
+        out();
+        out(`  ${warm('!')} ${e.id} shows ${origin}, which is not responding.`);
+        out(`    ${dim('its variants will render blank until that server is running again.')}`);
+        out();
+      }
+    }
+  }
+
+  if (binned.length) {
+    out();
+    out(`  ${warm(String(binned.length))} discarded without a verdict ${dim('— .stet/discarded/')}`);
+    for (const b of binned) out(`    ${dim(b)}`);
+  }
+
   const scoped = rules.filter((r) => r.globs.length).length;
   out(`  ${cool(String(rules.length))} ${rules.length === 1 ? 'rule' : 'rules'} in the canon${scoped ? dim(`, ${scoped} scoped to paths`) : ''}`);
   if (ok.length) out(dim('  run `stet` to judge them'));
@@ -1201,6 +1271,19 @@ function printNotes(): void {
   out(dim(`  ${notes.length} note${notes.length === 1 ? '' : 's'}. these are facts, not verdicts — nothing here is binding.`));
 }
 
+/** Is anything answering there? Short timeout: this is a hint, not a health check. */
+async function reachable(origin: string): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 600);
+    await fetch(origin, { signal: ctrl.signal });
+    clearTimeout(t);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function undo(): void {
   // Named `undo` rather than a second verb because it is one idea: take the
   // decision back a step. Decided goes to pending; pending goes away. Dropping
@@ -1249,6 +1332,7 @@ function dropPending(id: string): void {
   const item = drop(root, id);
   out();
   out(`  ${cool('discarded')} ${item.id} ${dim('— never decided, nothing earned from it')}`);
+  out(dim(`  kept in .stet/discarded/ — nothing is deleted, and \`stet status\` will say so`));
   if (item.globs?.length) out(dim(`  writes into ${item.globs.join(', ')} are no longer denied`));
   out();
 }

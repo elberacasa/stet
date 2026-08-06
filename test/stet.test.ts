@@ -1071,3 +1071,54 @@ describe('three variants', () => {
     expect(rule).toContain('aspect-ratio:16/10');
   });
 });
+
+// ── decisions that outlive the session that made them ──────────────────────
+describe('a variant pointing at a dev server', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 15_000 });
+
+  it('warns that the decision is only judgeable while that server runs', () => {
+    // A decision waits for a human, possibly for days. A dev server does not.
+    // When it stops the frames render blank and nothing explains why.
+    const r = run(['ask', 'Which hero?', '--url', 'localhost:8731/a.html', '--url', 'localhost:8731/b.html']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/stops when that server does/);
+    expect(r.stderr, 'and name the durable alternative').toMatch(/relative path is absorbed/);
+  });
+
+  it('says nothing when the variants were copied in', () => {
+    fs.writeFileSync(path.join(root, 'a.html'), '<b>a</b>');
+    fs.writeFileSync(path.join(root, 'b.html'), '<b>b</b>');
+    const r = run(['ask', 'Which one?', '--url', 'a.html', '--url', 'b.html']);
+    expect(r.stderr).not.toMatch(/stops when that server does/);
+  });
+
+  it('does not warn about a host that is somebody else\'s to keep up', () => {
+    const r = run(['ask', 'Which page?', '--url', 'https://example.com/a', '--url', 'https://example.com/b']);
+    expect(r.stderr).not.toMatch(/stops when that server does/);
+  });
+});
+
+// ── a question taken back before anyone answered it ────────────────────────
+describe('discarding leaves a mark', () => {
+  const BIN = path.join(process.cwd(), 'bin', 'stet.js');
+  const run = (args: string[]) => spawnSync('node', [BIN, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000 });
+
+  it('keeps the question rather than deleting it', () => {
+    // `stet undo <id>` is in the CLI and nothing can tell a human typing it
+    // from an agent running it to unblock itself. "A denied tool call cannot be
+    // ignored" holds only if removing the denial leaves something behind.
+    run(['ask', 'Which accent?', 'apricot', 'celadon', '--globs', 'index.html']);
+    run(['undo', 'which-accent']);
+    expect(fs.existsSync(path.join(root, '.stet/pending/which-accent'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.stet/discarded/which-accent/item.json'))).toBe(true);
+  });
+
+  it('tells the person it was addressed to', () => {
+    run(['ask', 'Which spacing?', 'tight', 'loose']);
+    run(['undo', 'which-spacing']);
+    const outp = run(['status']).stdout.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(outp).toMatch(/discarded without a verdict/);
+    expect(outp).toMatch(/which-spacing/);
+  });
+});
