@@ -5,6 +5,7 @@ import path from 'node:path';
 import { addItem, blind, decide, describeProblem, init, listEntries, readEntry, revealText, shuffleLabels, assetPath } from '../src/store.js';
 import { appendRule, appendDirectRule, bumpHits, estimateTokens, parseRules, readRules, renderBlock, reviseRule, ruleLine, selectRules, weakness } from '../src/rules.js';
 import { hasBlock, insert, remove, sync, unsync } from '../src/sync.js';
+import { PAGE } from '../src/page.js';
 import type { Item, Rule } from '../src/types.js';
 
 let root: string;
@@ -276,5 +277,42 @@ describe('sync', () => {
     const mdc = fs.readFileSync(path.join(dir, 'api.mdc'), 'utf8');
     expect(mdc).toContain('an api rule');
     expect(mdc).not.toContain('a web rule');
+  });
+});
+
+// ── the live preview ───────────────────────────────────────────────────────
+// Every check here is a bug that reached a real dev server first: an iframe
+// that never painted, an app that could not use storage or fetch, and a CSS
+// class the frame shared with the connection indicator in the header.
+describe('the live preview', () => {
+  it('never defers loading a frame or an image', () => {
+    // A deferred element inside a collapsed box is 0×0, never enters the
+    // viewport, and so never loads — it waits for itself. Both frames were
+    // blank white boxes on first paint because of this.
+    expect(PAGE).not.toMatch(/loading="lazy"/);
+  });
+
+  it('decides the sandbox from the origin rather than granting it flat', () => {
+    // allow-same-origin on a same-origin frame lets the frame reach into the
+    // page that sandboxed it and remove its own sandbox. Cross-origin — the
+    // dev server on another port — it is the only way the app can use
+    // localStorage or fetch its own API.
+    expect(PAGE).toContain('function sandboxFor(');
+    expect(PAGE).toMatch(/origin!==location\.origin/);
+    expect(PAGE).not.toMatch(/sandbox="allow-scripts allow-forms allow-popups allow-same-origin"/);
+  });
+
+  it('does not style the frame with a class another element already wears', () => {
+    // The connection indicator is `conn live`. A bare `.live` rule matched it
+    // too, so min-height:300px on the frame grew the status dot in the header
+    // into a 480×300 box over the title.
+    const worn = new Set<string>();
+    for (const m of PAGE.matchAll(/class="([^"{]+)"/g))
+      for (const c of m[1].trim().split(/\s+/)) worn.add(c);
+    // Any class used to style the frame must not also appear on a second,
+    // unrelated element. The pairing that bit us was .live on both.
+    expect(PAGE).toContain('.liveframe{');
+    expect(PAGE).not.toMatch(/^\.live\{/m);
+    expect(worn.has('liveframe') || PAGE.includes('class="liveframe"')).toBe(true);
   });
 });

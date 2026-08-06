@@ -146,9 +146,14 @@ main{padding-bottom:190px}
 .deck.flipping .col{border-right:none}
 .deck.flipping{position:relative}
 .missing{color:var(--faint);border:1px dashed var(--line);border-radius:5px;padding:14px 16px}
-.live{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel);
-  aspect-ratio:16/10;margin-bottom:8px}
-.live iframe{width:100%;height:100%;border:0;display:block;background:#fff}
+/* Named so it cannot collide with the connection indicator, which is
+   .conn.live — a bare .live matched both, and every rule meant for the frame
+   was silently being applied to the status dot in the header. */
+.liveframe{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel);
+  aspect-ratio:16/10;min-height:300px;margin-bottom:8px;
+  /* a real app is taller than a 16:10 box — let the human drag it open */
+  resize:vertical}
+.liveframe iframe{width:100%;height:100%;border:0;display:block;background:#fff}
 
 .was{
   margin:-6px 0 18px;padding:9px 12px;border:1px solid var(--line);border-radius:4px;
@@ -410,6 +415,26 @@ function asset(id,src,allowData){
   return "/a/"+encodeURIComponent(id)+"/"+String(src).split("/").map(encodeURIComponent).join("/");
 }
 
+/* The sandbox depends on where the variant is served from, and the difference
+   matters both ways.
+
+   A dev server on another port is a different origin, so allow-same-origin
+   gives the frame ITS OWN origin — not ours. It still cannot reach this page,
+   and without it the frame gets an opaque origin where localStorage throws and
+   same-origin fetch fails: a real app renders its markup and is otherwise dead,
+   so you would be judging two broken copies of your own page.
+
+   A variant we serve ourselves is same-origin, and there allow-scripts plus
+   allow-same-origin would let the frame reach into this document and remove
+   its own sandbox. So that combination is never granted to our own URLs. */
+function sandboxFor(href){
+  var base="allow-scripts allow-forms allow-popups";
+  try{
+    if(new URL(href,location.href).origin!==location.origin) return base+" allow-same-origin";
+  }catch(e){}
+  return base;
+}
+
 /* Shown, never silently dropped: a refused URL is a fact the human should see. */
 function refused(kind,value){
   return '<div class="unknown">refused a '+esc(kind)+' with an unusable scheme — shown as text, not loaded</div>'+
@@ -447,8 +472,10 @@ function blockHtml(b,id){
       var href=asset(id,String(b.href||""),false);
       if(href===null) return refused("url",b.href);
       return '<div class="block">'+t+
-        '<div class="live"><iframe src="'+esc(href)+'" loading="lazy" '+
-          'sandbox="allow-scripts allow-forms allow-popups"></iframe></div>'+
+        // Not lazy: a live variant that has not loaded yet is a blank white box,
+        // and a blank box is something a human will judge.
+        '<div class="liveframe"><iframe src="'+esc(href)+'" '+
+          'sandbox="'+esc(sandboxFor(href))+'"></iframe></div>'+
         '<a class="urlblock" target="_blank" rel="noreferrer" href="'+esc(href)+'">'+
         esc(b.title||"open full size")+"<span>"+esc(b.href||"")+" ↗</span></a></div>";
     default:

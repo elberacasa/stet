@@ -1,7 +1,7 @@
 {
   "name": "stetmark",
-  "version": "0.15.0",
-  "description": "stet \u2014 let it stand. Your agents ask once, your answer stands. A local verdict gate that turns your taste into rules coding agents obey.",
+  "version": "0.16.0",
+  "description": "stet — let it stand. Your agents ask once, your answer stands. A local verdict gate that turns your taste into rules coding agents obey.",
   "keywords": [
     "ai",
     "agents",

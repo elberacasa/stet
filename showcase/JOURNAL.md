@@ -444,6 +444,100 @@ now impossible.*
 
 ---
 
+## The `url` block against a real dev server
+
+Everything above tested stet against stet. The `url` block — the one that
+embeds a running app side by side instead of a screenshot — had only ever been
+pointed at static files stet served itself. That is not the case it exists for.
+The case it exists for is a person with `npm run dev` already running.
+
+So I wrote one: two variants of a pricing page on `127.0.0.1:5173`, behind
+`?v=a` and `?v=b`. Not markup — a small app that does the three things a
+screenshot cannot show and an iframe might quietly break. It writes to
+`localStorage`, it `fetch`es its own `/api/price`, and it has a monthly/yearly
+toggle that rewrites the prices. Each variant prints the result of all three
+into the page, so a failure is legible from across the room.
+
+Then a real stet item pointing both variants at it, and the page opened in a
+browser.
+
+### Finding 15 — both frames were blank white boxes
+
+Same bug as the images, in a place I had not thought to look. An iframe with
+`loading="lazy"` inside a container that has not been laid out yet is 0×0, and
+a 0×0 element never enters the viewport, so it never loads, so it stays 0×0. It
+waits for itself.
+
+I had already fixed this for `<img>` and written down why. I then wrote the
+`url` block and reached for the same attribute, because deferring work you might
+not need is the reflex. The lesson did not transfer, because I had filed it as
+*a fact about images* rather than *a fact about deferred loading inside
+collapsed boxes*. It is now a test, phrased as the general fact.
+
+### Finding 16 — the sandbox crippled every real app
+
+Both frames rendered, and both printed:
+
+```
+localStorage:BLOCKED · fetch:FAILED
+```
+
+The sandbox was `allow-scripts allow-forms allow-popups`. Without
+`allow-same-origin` a frame gets an **opaque origin**: storage throws, and
+same-origin requests fail. Every real app — anything with a session, a theme
+preference, a cart, an API call — is broken inside the preview. It renders. It
+looks fine. It is not the app.
+
+The reason `allow-same-origin` was missing is a real one, not an oversight: for
+a frame served from stet's *own* origin, `allow-scripts allow-same-origin`
+together let the frame reach its parent and remove its own sandbox — the
+sandbox becomes decorative. So the fix cannot be to add the flag.
+
+It is to decide from the origin:
+
+```js
+function sandboxFor(href){
+  var base="allow-scripts allow-forms allow-popups";
+  try{ if(new URL(href,location.href).origin!==location.origin) return base+" allow-same-origin"; }catch(e){}
+  return base;
+}
+```
+
+A dev server on another port is a different origin. It gets its own origin back
+— which is all it ever wanted — and still cannot touch the page holding it. I
+verified that second half rather than assuming it: from inside both frames, the
+parent document reads `blocked`.
+
+### Finding 17 — a CSS class worn by two different things
+
+With the frames working I made them taller, since a real app does not fit a
+16:10 box: `min-height:300px` and `resize:vertical` on `.live`.
+
+The next screenshot had a 480×300 white rectangle sitting over the header.
+
+The connection indicator is `<div class="conn live">`. The frame container was
+`<div class="live">`. A bare `.live` rule had been matching both from the moment
+I wrote the block; `aspect-ratio` on a small flex item did nothing visible, so
+the collision sat there silently until a `min-height` made it 300px tall.
+
+`elementFromPoint` on the rectangle named it in one call: `div.conn.live`,
+`resize: vertical`, 480×300. The container is now `.liveframe`, and the test
+asserts no bare `.live` rule exists.
+
+### And then it worked
+
+Both frames live, `localStorage:ok(1) · fetch:ok(USD)`, and clicking **Yearly**
+in each changed `$12/mo` to `$120/yr` in one and `$40/mo` to `$400/yr` in the
+other — two running apps, side by side, both interactive, and the human still
+cannot see which is which.
+
+Worth stating plainly what these three have in common: **the preview was
+convincingly wrong.** It rendered, it was the right size, the frames were the
+right URLs, and every automated check was green. What it showed was not the
+app. Nothing but pointing it at a real dev server would have found that.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -469,10 +563,15 @@ Not one of these was visible from reading the code.
 | 17 | 20 agents at once | read-modify-write on RULES.md lost 4 of 20 rules and produced duplicate rule numbers |
 | 18 | 8 agents, one id | `existsSync` then `mkdir` let two agents claim the same decision; the loser overwrote the winner |
 | 19 | injecting a hostile item | `javascript:` URLs were defused by accident, not on purpose — safe today, unsafe after any widening of the scheme check |
+| 20 | a real dev server | `loading="lazy"` on an iframe in a collapsed box: 0×0 never enters the viewport, so it never loads — both previews were blank |
+| 21 | the same dev server | the sandbox gave every embedded app an opaque origin: `localStorage` threw and `fetch` failed in anything real |
+| 22 | a screenshot of that page | `.live` styled both the frame and the connection indicator; a `min-height` grew the status dot into a 480×300 box over the header |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Eight of the ten reported
-success while broken.
+invisible from the code and obvious from the use.** Eighteen of the twenty-two
+reported success while broken. Only four ever announced themselves — 5, 6, 7
+and 14 — and all four are the boring kind: a hang or a non-zero exit. Every
+finding that mattered arrived wearing green.
 
 Finding 10 is the one worth dwelling on, because it was not found by a test or a
 crash — it was found by looking at what two real verdicts actually produced. The
