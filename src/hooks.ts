@@ -299,6 +299,15 @@ export function stop(root: string, input: HookInput, threshold = CHURN_THRESHOLD
 
   for (const c of fresh) append(root, input.session_id, { t: 'f', p: c.path });
 
+  // Scoped, not bare. The churn signal already knows which path was argued
+  // over, and a rule with globs is delivered at the moment an agent touches
+  // that area again; an unscoped one waits at the top of the next session and
+  // competes with everything after it. Suggesting the weaker form when the
+  // stronger one is one flag away was leaving the mechanism on the table.
+  const scope = (p: string): string => {
+    const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+    return dir ? `${dir}/**` : p;
+  };
   const lines = [
     'stet: unwritten taste detected.',
     '',
@@ -307,14 +316,17 @@ export function stop(root: string, input: HookInput, threshold = CHURN_THRESHOLD
     'Being asked to redo the same file across separate instructions usually means',
     'a preference is being negotiated out loud instead of recorded. If one of those',
     'corrections was a matter of taste rather than a bug, say so and offer to write',
-    'it down — `stet rule "<the one line>"` — so it never has to be said again.',
+    'it down — scoped, so it arrives the moment an agent touches that area again:',
+    '',
+    ...fresh.map((c) => `  stet rule "<the one line>" --globs '${scope(c.path)}'`),
+    '',
     'If it was just bugs, ignore this.',
   ];
   return { hookSpecificOutput: { hookEventName: 'Stop', additionalContext: lines.join('\n') } };
 }
 
 /** Compaction just discarded the conversation — say it all again. */
-export function postCompact(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
+export function preCompact(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
   // Forget what this session was told: the context that held it is gone.
   if (input.session_id) {
     try {
@@ -323,7 +335,7 @@ export function postCompact(root: string, input: HookInput, budget = DEFAULT_BUD
       /* nothing to forget */
     }
   }
-  return canonOnce(root, input, 'PostCompact', budget);
+  return canonOnce(root, input, 'PreCompact', budget);
 }
 
 export function userPromptSubmit(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
@@ -335,7 +347,7 @@ export function userPromptSubmit(root: string, input: HookInput, budget = DEFAUL
  * and run by an older one produces hooks that fire, return nothing, and gate
  * nothing — wired and useless, which reads exactly like working.
  */
-export const EVENTS = ['pre-tool-use', 'post-tool-use', 'stop', 'session-start', 'post-compact', 'user-prompt'] as const;
+export const EVENTS = ['pre-tool-use', 'post-tool-use', 'stop', 'session-start', 'pre-compact', 'user-prompt'] as const;
 
 /** Dispatch. Never throws: a broken hook must not break the session. */
 export function runHook(root: string, event: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
@@ -349,8 +361,12 @@ export function runHook(root: string, event: string, input: HookInput, budget = 
         return stop(root, input);
       case 'user-prompt':
         return userPromptSubmit(root, input, budget);
+      case 'pre-compact':
+      // Wirings written before this was corrected call `post-compact`, an
+      // event Claude Code never emitted. Answer it anyway rather than going
+      // silent on anyone who has not re-run `stet claude`.
       case 'post-compact':
-        return postCompact(root, input, budget);
+        return preCompact(root, input, budget);
       case 'session-start':
         sweepSessions(root);
         return canonOnce(root, input, 'SessionStart', budget);

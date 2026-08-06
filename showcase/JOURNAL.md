@@ -1202,6 +1202,109 @@ still never touched, and removal takes only what carries the marker.
 
 ---
 
+## Pointing it at Claude Code, and finding a hook that never fired
+
+The decision was to stop hedging across every agent and aim squarely at Claude
+Code. Before designing anything new, one assumption in the existing wiring had
+never been checked: that Claude Code emits the events stet listens for.
+
+### Finding 43 — `PostCompact` is not an event
+
+The authoritative list, from the official plugin-development skill on this
+machine:
+
+```
+PreToolUse, PostToolUse, Stop, SubagentStop, SessionStart,
+SessionEnd, UserPromptSubmit, PreCompact, Notification
+```
+
+There is no `PostCompact`. stet had wired it since the hooks existed. **That
+hook has never fired, once, for anybody.**
+
+And the README's third headline claim about Claude Code was *"Taste survives
+compaction — `PostCompact` re-states the canon, because compaction is exactly
+when your preferences get summarised away."* The mechanism named in that
+sentence was never called. The code behind it is correct — it deletes the
+session record so the canon will be restated, then restates it — and it has
+been sitting there, correct and unreachable, the entire time.
+
+The reason it hid is the part worth keeping. `stet claude status` reports:
+
+```
+verified against stet 0.22.0 — all 6 events implemented
+```
+
+That check is real. It spawns the binary the hooks actually point at and asks
+which arguments it implements — which is how the version-skew bug was closed
+four times. But it asks **our own binary**, about **our own argument names**.
+Nothing ever asked whether Claude Code emits `PostCompact`. Both halves of that
+check were written by the same person, so it could only ever agree with itself.
+
+This is finding 1 wearing a different hat: a real check, run faithfully,
+verifying the wrong half. There is now a list of the events Claude Code actually
+emits, `stet claude` refuses to wire anything absent from it, and a test asserts
+every wired event is real.
+
+The corrected wiring is `PreCompact`, whose documented purpose is *"add critical
+information to preserve"* — and it now pairs with the `UserPromptSubmit` hook
+from the previous release: `PreCompact` restates the canon and forgets what the
+doomed context was told, so the first prompt after compaction restates it into
+the fresh one. Wirings written before this still call `stet hook post-compact`;
+that argument is still answered rather than going silent on them, though it has
+never been reached by anything.
+
+### Finding 44 — twenty-five files of private state, one file worth sharing
+
+`.stet/` is meant to be committed: `RULES.md` and `decided/` are the product,
+and a canon that is not shared is not a canon.
+
+After a day of work, `.stet/` contained twenty-six files. **Twenty-five of them
+were per-developer session journals** — which rules an agent has been shown,
+which files it revised — rewritten on every tool call, meaningless on anyone
+else's machine, and a merge conflict in every commit.
+
+`stet init` now writes a `.stet/.gitignore` covering `sessions/` and `*.lock`,
+and never overwrites one the human wrote. What lands in git afterwards is the
+canon and nothing else.
+
+### The signal that was already being collected and half used
+
+`PostToolUse` records which instruction caused each write, and `Stop` reports a
+file revised across three separate instructions — the tool noticing, from the
+other side, that a preference is being argued out loud instead of recorded.
+
+It then suggested `stet rule "<the one line>"`. Unscoped. Which produces exactly
+the kind of rule this project spent a release arguing is the weaker kind: it
+waits at the top of the next session and competes with everything after it,
+instead of arriving at the moment an agent touches that area again.
+
+The churn signal already knows the path. It proposes the scoped form now:
+
+```
+  src/components/Button.tsx — revised across 3 separate instructions this session
+
+  stet rule "<the one line>" --globs 'src/components/**'
+```
+
+One flag, and the mechanism the whole tool is built on is actually used by its
+own suggestion.
+
+### Two things checked and left alone
+
+`sweepSessions` looked like dead code of the same species as the unwired hook —
+it deletes session files older than a day, and nothing obvious called it. It is
+called on `session-start`. Twenty-five files survived my test because all
+twenty-five were minutes old, which is correct behaviour, not a leak.
+
+And I wanted the `Stop` message to quote what the human actually said, rather
+than counting distinct instructions. The journal stores a `prompt_id`, not the
+text. `UserPromptSubmit` may carry the prompt itself, which would make that
+possible — but I could not confirm the payload shape from anything on this
+machine, and the honest move is to not build on an assumption about someone
+else's schema. Noted, not built.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -1251,12 +1354,21 @@ Not one of these was visible from reading the code.
 | 40 | reading the wiring table | `UserPromptSubmit` was implemented, dispatched and advertised — and never installed, so a verdict given mid-session bound tomorrow's agent instead of the one waiting for it |
 | 41 | generating a slash command | `allowed-tools` was built from the resolved command, so a pinned install pre-approved every node process on the machine |
 | 42 | re-wiring a pinned install | it recognised its own command files by sniffing for a string the pinned form does not contain, so it refused to update itself and left a stale command behind |
+| 43 | **checking the other half** | `PostCompact` is not a Claude Code event. That hook never fired once, for anybody — and `stet claude status` called it verified, because it asked our own binary about our own argument names and never asked Claude Code what it emits |
+| 44 | `git add .` | `.stet/` held 26 files: one canon worth sharing and 25 per-developer session journals, all of them committed |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the thirty-nine
 announced themselves — 5, 6, 7, 14, 24, 26, 31 and 39 — and they are the boring
 kind: a hang, a non-zero exit, a warning printed before proceeding anyway. The
-other thirty-four reported success while broken.
+other thirty-six reported success while broken.
+
+Finding 43 is the one to reread. Every safeguard behaved perfectly: the hook was
+wired, the binary implemented it, the probe ran, the status was green, the README
+described the behaviour, and a test covered the function. None of that could
+detect that the event name did not exist, because every piece of it was written
+by the same author checking their own work. The only thing that found it was
+reading someone else's list.
 
 Findings 35 to 39 are the first that came from **someone other than the author**,
 in a repository I have never seen, and they are the densest run in this log: five

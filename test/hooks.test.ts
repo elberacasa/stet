@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expand, matches, matchesAny } from '../src/glob.js';
-import { canonOnce, churn, EVENTS, loadSession, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
-import { install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
+import { canonOnce, churn, EVENTS, loadSession, postToolUse, preCompact, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
+import { CLAUDE_EVENTS, install, installCommands, installed, settingsPath, uninstall, uninstallCommands, WIRING } from '../src/claude.js';
 import { addItem, init } from '../src/store.js';
 import { appendDirectRule, readRules } from '../src/rules.js';
 import { withLock } from '../src/lock.js';
@@ -158,7 +158,7 @@ describe('surviving compaction', () => {
     const input = { session_id: 'sD', cwd: root };
     expect(canonOnce(root, input, 'SessionStart')).not.toBeNull();
     expect(canonOnce(root, input, 'SessionStart')).toBeNull();   // already said
-    expect(postCompact(root, input)?.hookSpecificOutput?.additionalContext).toContain('never apologise');
+    expect(preCompact(root, input)?.hookSpecificOutput?.additionalContext).toContain('never apologise');
   });
 });
 
@@ -448,5 +448,81 @@ describe('slash commands', () => {
     installCommands(root, 'stet');
     expect(uninstallCommands(root).length).toBe(2);
     expect(fs.existsSync(path.join(root, '.claude/commands/stet.md'))).toBe(false);
+  });
+});
+
+// ── listening for events that exist ────────────────────────────────────────
+describe('the wiring names events Claude Code emits', () => {
+  it('wires nothing Claude Code does not send', () => {
+    // stet wired `PostCompact` for its entire life. There is no such event.
+    // That hook never fired once, and `stet claude status` reported it
+    // verified — because it asked our own binary whether it implements
+    // `post-compact` (it does) and never asked whether Claude Code emits
+    // `PostCompact` (it does not). A real check, pointed at the wrong half.
+    for (const w of WIRING) {
+      expect(CLAUDE_EVENTS as readonly string[], `${w.event} is not a Claude Code event`).toContain(w.event);
+    }
+  });
+
+  it('still answers a wiring written before the name was corrected', () => {
+    // Anyone wired by an older stet calls `stet hook post-compact`. It never
+    // fired, so nothing is lost — but going silent on them adds a second
+    // failure to the first.
+    appendDirectRule(root, 'never apologise in error copy', {});
+    const out = runHook(root, 'post-compact', { session_id: 'old', cwd: root });
+    expect(out?.hookSpecificOutput?.additionalContext).toContain('never apologise');
+  });
+
+  it('restates the canon around compaction, forgetting what the lost context held', () => {
+    appendDirectRule(root, 'error copy names the next action', {});
+    const first = runHook(root, 'session-start', { session_id: 'c1', cwd: root });
+    expect(JSON.stringify(first)).toContain('error copy names the next action');
+    // Already delivered — silent.
+    expect(runHook(root, 'user-prompt', { session_id: 'c1', cwd: root })).toBeNull();
+    // Compaction destroys the context that held it, so it must be said again.
+    const compact = runHook(root, 'pre-compact', { session_id: 'c1', cwd: root });
+    expect(JSON.stringify(compact)).toContain('error copy names the next action');
+    expect(compact?.hookSpecificOutput?.hookEventName).toBe('PreCompact');
+  });
+});
+
+// ── what belongs in the repo and what does not ─────────────────────────────
+describe('the project directory', () => {
+  it('keeps per-developer session state out of git', () => {
+    // After a day of work: one RULES.md worth sharing, and 25 session
+    // journals beside it — each rewritten on every tool call, each a merge
+    // conflict waiting to happen.
+    const ignore = fs.readFileSync(path.join(root, '.stet', '.gitignore'), 'utf8');
+    expect(ignore).toMatch(/^sessions\/$/m);
+    expect(ignore).toMatch(/^\*\.lock$/m);
+    // The patterns, not the prose: the comment names RULES.md and decided/
+    // precisely to say they belong in the repo.
+    const patterns = ignore.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+    expect(patterns).toEqual(['sessions/', '*.lock']);
+  });
+
+  it('never overwrites one the human wrote', () => {
+    fs.writeFileSync(path.join(root, '.stet', '.gitignore'), 'mine\n');
+    init(root);
+    expect(fs.readFileSync(path.join(root, '.stet', '.gitignore'), 'utf8')).toBe('mine\n');
+  });
+});
+
+// ── the churn signal ───────────────────────────────────────────────────────
+describe('taste said out loud', () => {
+  it('proposes a scoped rule, not a bare one', () => {
+    // A rule with globs is delivered at the moment an agent touches that area
+    // again. An unscoped one waits at the top of the next session. The churn
+    // signal already knows the path, so suggesting the weaker form was leaving
+    // the whole mechanism on the table.
+    for (const q of ['p1', 'p2', 'p3']) {
+      postToolUse(root, {
+        session_id: 'c1', cwd: root, prompt_id: q, tool_name: 'Edit',
+        tool_input: { file_path: path.join(root, 'src/components/Button.tsx'), old_string: 'a', new_string: 'b' },
+      });
+    }
+    const ctx = stop(root, { session_id: 'c1', cwd: root })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('src/components/Button.tsx');
+    expect(ctx).toContain(`--globs 'src/components/**'`);
   });
 });

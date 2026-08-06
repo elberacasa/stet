@@ -243,7 +243,7 @@ async function hook(): Promise<void> {
 }
 
 async function claude(): Promise<void> {
-  const { install, installCommands, installed, uninstall, uninstallCommands, WIRING } = await import('./claude.js');
+  const { CLAUDE_EVENTS, install, installCommands, installed, uninstall, uninstallCommands, WIRING } = await import('./claude.js');
   // Local by default. A checked-in hook pointing at a binary a teammate has
   // not installed fails on every tool call and gates nothing — the repo would
   // claim a protection it is not providing, which is worse than no protection.
@@ -258,6 +258,19 @@ async function claude(): Promise<void> {
     if (gone.length) out(`  ${cool('removed')} ${gone.length} slash command(s)`);
     return;
   }
+  // Both halves, not one. The old check asked our own binary whether it
+  // implements each hook argument — which it always does, since we wrote both
+  // sides — and never asked whether Claude Code emits the event we are
+  // listening for. `PostCompact` passed that check for the life of the project
+  // and was never emitted by anything.
+  const unreal = WIRING.filter((w) => !(CLAUDE_EVENTS as readonly string[]).includes(w.event));
+  if (unreal.length) {
+    throw new Error(
+      `this build wires ${unreal.map((w) => w.event).join(', ')}, which Claude Code does not emit.\n` +
+        `       those hooks would never fire. real events: ${CLAUDE_EVENTS.join(', ')}`,
+    );
+  }
+
   if (sub === 'status') {
     const file = install(root, scope, 'stet', { dryRun: true }).file;
     if (!installed(root, scope)) return out(dim('  not wired'));

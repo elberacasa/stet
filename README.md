@@ -148,6 +148,14 @@ deterministically, when a rule can't survive on its own:
    teaches its own shape                                     ← binding
 ```
 
+## Built for Claude Code
+
+stet is aimed at Claude Code specifically. It writes a vendor-neutral
+`AGENTS.md` and will sync into other agents' surfaces, and that still works —
+but every mechanism below is a Claude Code hook, and that is where the effort
+goes. A tool that hedges across five agents ends up being a text file for all of
+them, which is the exact thing this exists to replace.
+
 ## Claude Code: a gate, not a suggestion
 
 ```bash
@@ -206,8 +214,10 @@ travels through `PreToolUse`. `UserPromptSubmit` delivers it at the next thing
 you type, once, so the answer you just gave governs the work in front of you
 rather than the work tomorrow.
 
-**Taste survives compaction.** `PostCompact` re-states the canon, because
-compaction is exactly when your preferences get summarised away.
+**Taste survives compaction.** `PreCompact` re-states the canon and forgets what
+the doomed context was told, so the next thing you type restates it into the
+fresh one — because compaction is exactly when your preferences get summarised
+away.
 
 **And it notices what you never wrote down.** The gate only helps once a
 decision exists — but nothing creates one, because an agent trained to finish

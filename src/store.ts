@@ -43,6 +43,24 @@ export function init(root: string): boolean {
   const fresh = !fs.existsSync(p.stet);
   fs.mkdirSync(p.pending, { recursive: true });
   fs.mkdirSync(p.decided, { recursive: true });
+  // The canon and the decided items are the product and belong in the repo.
+  // The session journals next to them are per-developer, machine-specific, and
+  // rewritten on every tool call — 25 of them against one RULES.md after a day
+  // of work, each one a merge conflict waiting to happen and noise on top of
+  // the thing that is actually worth sharing.
+  const ignore = path.join(p.stet, '.gitignore');
+  if (!fs.existsSync(ignore)) {
+    fs.writeFileSync(
+      ignore,
+      [
+        '# Per-developer state, not shared taste.',
+        '# Everything else here — RULES.md and decided/ — is the point, and belongs in the repo.',
+        'sessions/',
+        '*.lock',
+        '',
+      ].join('\n'),
+    );
+  }
   if (!fs.existsSync(p.rules)) {
     fs.writeFileSync(
       p.rules,

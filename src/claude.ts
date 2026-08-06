@@ -14,7 +14,33 @@ import { writeAtomic } from './lock.js';
  * literal string "stet hook" only catches the first, which silently orphans
  * the second on removal and duplicates it on reinstall.
  */
-export const TAG = /stet.*\bhook\s+(pre-tool-use|post-tool-use|stop|session-start|post-compact|user-prompt)\b/;
+export const TAG = /stet.*\bhook\s+(pre-tool-use|post-tool-use|stop|session-start|pre-compact|post-compact|user-prompt)\b/;
+
+/**
+ * Every event Claude Code actually emits.
+ *
+ * This list exists because stet wired `PostCompact` for its entire life. There
+ * is no such event — the real one is `PreCompact` — so that hook never fired
+ * once, and the README's claim that taste survives compaction was resting on a
+ * hook that was never called.
+ *
+ * It hid because the check was pointed at the wrong side. `stet claude status`
+ * asked *our own binary* whether it implements `post-compact`, which it does,
+ * and reported "verified — all 6 events implemented". Nothing ever asked
+ * whether Claude Code emits the event we were listening for. Same shape as the
+ * very first bug in this project: a real check, verifying the wrong half.
+ */
+export const CLAUDE_EVENTS = [
+  'PreToolUse',
+  'PostToolUse',
+  'Stop',
+  'SubagentStop',
+  'SessionStart',
+  'SessionEnd',
+  'UserPromptSubmit',
+  'PreCompact',
+  'Notification',
+] as const;
 
 export interface HookEntry {
   matcher?: string;
@@ -52,9 +78,9 @@ export const WIRING: Wiring[] = [
     why: 'states the canon once, at the top of the session',
   },
   {
-    event: 'PostCompact',
-    arg: 'post-compact',
-    why: 'states it again after compaction, which is when taste gets summarised away',
+    event: 'PreCompact',
+    arg: 'pre-compact',
+    why: 'restates the canon around compaction, which is when taste gets summarised away',
   },
   {
     // Implemented since the hooks existed and never installed, which left a
