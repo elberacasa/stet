@@ -6,8 +6,8 @@ import { spawn } from 'node:child_process';
 
 // execFile has no `input` option — that is execFileSync. Feeding stdin means
 // writing to the pipe and closing it, or the child waits forever.
-const run = (cmd, args, { input = '' } = {}) => new Promise((done) => {
-  const p = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'ignore'] });
+const run = (cmd, args, { input = '', cwd } = {}) => new Promise((done) => {
+  const p = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'ignore'], ...(cwd ? { cwd } : {}) });
   let stdout = '';
   p.stdout.on('data', (d) => (stdout += d));
   p.on('error', () => done({ stdout: '', code: -1 }));
@@ -141,6 +141,60 @@ console.log('\n6. hostile hook input over the real CLI');
     }
   }
   ok('every hook exits clean on garbage', bad === 0, `${inputs.length * 5} combinations`);
+}
+
+// ── 7. many agents at once — fan-out workflows, parallel subagents ───────
+console.log('\n7. parallel agents against one canon');
+{
+  const many = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-many-'));
+  init(many);
+  const N = 24;
+  await Promise.all(Array.from({ length: N }, (_, i) =>
+    run('node', [BIN, 'rule', `Rule number ${i} about how this repository prefers things`, '--tag', `t${i}`],
+        { cwd: many })));
+  const md = fs.readFileSync(path.join(many, '.stet', 'RULES.md'), 'utf8');
+  const nums = [...md.matchAll(/^## (\d+) /gm)].map((m) => m[1]);
+  const texts = new Set([...md.matchAll(/Rule number (\d+) /g)].map((m) => m[1]));
+  ok('every rule survives', texts.size === N, `${texts.size}/${N} distinct rules`);
+  ok('no duplicate rule numbers', new Set(nums).size === nums.length, `${nums.length} rules, ${new Set(nums).size} numbers`);
+  ok('no lock left behind', !fs.existsSync(path.join(many, '.stet', 'RULES.md.lock')));
+  fs.rmSync(many, { recursive: true, force: true });
+}
+
+// ── 8. two agents claiming the same decision id ──────────────────────────
+console.log('\n8. colliding decision ids');
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-collide-'));
+  init(dir);
+  const item = JSON.stringify({
+    id: 'same-id', question: 'Which one?', map: { A: 'a', B: 'b' },
+    variants: [{ label: 'A', blocks: [] }, { label: 'B', blocks: [] }],
+  });
+  const results = await Promise.all(Array.from({ length: 8 }, () =>
+    run('node', [BIN, 'ask'], { cwd: dir, input: item })));
+  const won = results.filter((r) => r.code === 0).length;
+  ok('exactly one agent claims the id', won === 1, `${won} of 8 succeeded`);
+  ok('the item is intact', (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, '.stet/pending/same-id/item.json'), 'utf8')).id === 'same-id'; }
+    catch { return false; }
+  })());
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// ── 9. a lock left by a process that died ────────────────────────────────
+console.log('\n9. recovering a stale lock');
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-stale-'));
+  init(dir);
+  const lock = path.join(dir, '.stet', 'RULES.md.lock');
+  fs.writeFileSync(lock, '999999 crashed');
+  fs.utimesSync(lock, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+  const t0 = Date.now();
+  const r = await run('node', [BIN, 'rule', 'a rule written after a crash left a lock behind'], { cwd: dir });
+  const took = Date.now() - t0;
+  ok('a dead process does not wedge the canon', r.code === 0, `exit ${r.code} in ${took}ms`);
+  ok('the rule landed', fs.readFileSync(path.join(dir, '.stet/RULES.md'), 'utf8').includes('after a crash'));
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(`\n${fail.length ? `FAILED: ${fail.join(', ')}` : 'all stress checks passed'}`);

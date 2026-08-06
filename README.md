@@ -274,6 +274,30 @@ Every write is marker-delimited and idempotent. `stet sync --remove` restores
 each file byte for byte. stet never creates a config file your repo didn't
 already have, except `AGENTS.md`.
 
+## Many agents at once
+
+Fan-out workflows, parallel subagents and two terminals on one repo all write to
+the same canon, so every mutation of `RULES.md` is serialised with a lock file —
+`open(path, 'wx')`, which fails atomically if the path exists. Held across the
+read-modify-write, released in a `finally`, taken over after twenty seconds if
+the holder died.
+
+Measured on 20 agents recording a rule at the same instant:
+
+| | before | after |
+|---|---|---|
+| rules that survived | 16 / 20 | **20 / 20** |
+| distinct rule numbers | 10 | **20** |
+| duplicate numbers | 4 | **0** |
+
+Decision ids are claimed by `mkdir` itself rather than by asking whether the
+directory exists, so two agents queueing the same id cannot both win. Every
+write into a shared surface goes through a temp file and a rename, so a reader
+sees the old canon or the new one and never half of one.
+
+**The gate never locks.** The hook path only reads, so `PreToolUse` stays at
+50ms no matter how many agents are writing.
+
 ## What stet deliberately is not
 
 Not an agent orchestrator. Not a dashboard. Not traffic-based A/B testing. Not

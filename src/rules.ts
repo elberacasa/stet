@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import type { Item, Rule } from './types.js';
 import { paths } from './store.js';
+import { withLock, writeAtomic } from './lock.js';
 
 export const HEADER = `# Rules
 
@@ -74,6 +75,13 @@ function list(s: string | undefined): string[] {
 /** Appends a rule earned from a decided item. Returns the rule as stored. */
 export function appendRule(root: string, item: Item): Rule {
   const file = paths(root).rules;
+  // Locked: the rule number is derived from the file's current contents, so a
+  // concurrent append would read the same maximum and both would claim it.
+  return withLock(file, () => appendRuleLocked(root, item));
+}
+
+function appendRuleLocked(root: string, item: Item): Rule {
+  const file = paths(root).rules;
   const existing = readRules(root);
   const n = existing.reduce((m, r) => Math.max(m, r.n), 0) + 1;
   const text = ruleLine(item.because ?? '');
@@ -98,7 +106,7 @@ export function appendRule(root: string, item: Item): Rule {
     current = HEADER;
   }
   if (!current.trim()) current = HEADER;
-  fs.writeFileSync(file, current.replace(/\s*$/, '\n') + entry);
+  writeAtomic(file, current.replace(/\s*$/, '\n') + entry);
 
   return { n, text, from: item.id, earned: date, tags, globs, body: `${asked}${rest ? `\n${rest}` : ''}`, hits: 0 };
 }
@@ -113,6 +121,10 @@ export function appendRule(root: string, item: Item): Rule {
 export function bumpHits(root: string, tags: string[] | undefined): number {
   const want = new Set((tags ?? []).map((t) => t.toLowerCase()));
   if (!want.size) return 0;
+  return withLock(paths(root).rules, () => bumpHitsLocked(root, want));
+}
+
+function bumpHitsLocked(root: string, want: Set<string>): number {
   const file = paths(root).rules;
   let text: string;
   try {
@@ -133,7 +145,7 @@ export function bumpHits(root: string, tags: string[] | undefined): number {
     if (rewritten !== part) bumped++;
     return rewritten;
   });
-  if (bumped) fs.writeFileSync(file, next.join(''));
+  if (bumped) writeAtomic(file, next.join(''));
   return bumped;
 }
 
@@ -148,13 +160,15 @@ export function reviseRule(root: string, n: number, text: string): Rule {
   const file = paths(root).rules;
   const line = ruleLine(text);
   if (!line) throw new Error('a rule needs a line of text');
-  const current = fs.readFileSync(file, 'utf8');
-  const re = new RegExp(`^## ${n}\\s*[—–-]\\s*.*$`, 'm');
-  if (!re.test(current)) throw new Error(`no rule ${n} in RULES.md`);
-  fs.writeFileSync(file, current.replace(re, `## ${n} — ${line}`));
-  const found = readRules(root).find((r) => r.n === n);
-  if (!found) throw new Error(`rule ${n} vanished after revision`);
-  return found;
+  return withLock(file, () => {
+    const current = fs.readFileSync(file, 'utf8');
+    const re = new RegExp(`^## ${n}\\s*[—–-]\\s*.*$`, 'm');
+    if (!re.test(current)) throw new Error(`no rule ${n} in RULES.md`);
+    writeAtomic(file, current.replace(re, `## ${n} — ${line}`));
+    const found = readRules(root).find((r) => r.n === n);
+    if (!found) throw new Error(`rule ${n} vanished after revision`);
+    return found;
+  });
 }
 
 /**
@@ -186,6 +200,10 @@ export function weakness(text: string): string | null {
  * you have already corrected an agent twice and want it to stop.
  */
 export function appendDirectRule(root: string, text: string, opts: { tags?: string[]; globs?: string[]; note?: string } = {}): Rule {
+  return withLock(paths(root).rules, () => appendDirectRuleLocked(root, text, opts));
+}
+
+function appendDirectRuleLocked(root: string, text: string, opts: { tags?: string[]; globs?: string[]; note?: string }): Rule {
   const file = paths(root).rules;
   const existing = readRules(root);
   const n = existing.reduce((m, r) => Math.max(m, r.n), 0) + 1;
@@ -210,7 +228,7 @@ export function appendDirectRule(root: string, text: string, opts: { tags?: stri
     current = HEADER;
   }
   if (!current.trim()) current = HEADER;
-  fs.writeFileSync(file, current.replace(/\s*$/, '\n') + entry);
+  writeAtomic(file, current.replace(/\s*$/, '\n') + entry);
 
   return { n, text: line, from: 'a correction', earned: date, tags, globs, body: rest, hits: 0 };
 }

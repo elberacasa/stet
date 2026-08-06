@@ -295,6 +295,57 @@ test, but by screenshotting the canon for a promotional GIF and reading it.
 
 ---
 
+## Bulletproofing for many agents at once
+
+A fan-out workflow, parallel subagents, two terminals on one repo — all of them
+write to the same canon. That path had never been tested, so it was tested
+before it was defended:
+
+```
+20 agents recording a rule at the same instant
+  rules that survived : 16 / 20
+  distinct numbers    : 10
+  duplicate numbers   : ## 1, ## 2, ## 8, ## 9
+```
+
+### Finding 13 — the canon lost updates and duplicated rule numbers
+
+Every path that touches `RULES.md` is read-modify-write: append reads the file
+to find the next number, revise rewrites one heading, `bumpHits` rewrites
+provenance lines. Concurrently, they read the same maximum and both claim it —
+four rules vanished, and rule numbers collided, which also breaks `reviseRule`,
+since it targets a rule *by number*.
+
+`open(path, 'wx')` fails if the path exists, and that check-and-create is atomic
+at the filesystem. That is the whole mechanism: a lock file next to `RULES.md`,
+held across the read-modify-write, released in a `finally` so a throwing write
+cannot wedge every later one. A lock older than twenty seconds is assumed to
+belong to a process that died and is taken over — verified by planting one and
+watching the next writer recover in 56ms. Waiters back off with jitter so they
+do not synchronise, and a live lock times out with a sentence rather than
+hanging.
+
+After:
+
+```
+rules that survived : 20 / 20      duplicate numbers : 0
+distinct numbers    : 20           leftover locks    : 0
+```
+
+Two smaller races went with it. Claiming a decision id used `existsSync` then
+`mkdir`, so two agents queueing the same id both passed the check and the loser
+silently overwrote the winner; the id is now claimed by `mkdir` itself, which
+fails atomically. And every write into a shared surface — `AGENTS.md`,
+`CLAUDE.md`, `.claude/settings.json` — now goes through a temp file and a
+rename, so an agent reading mid-write sees the old canon or the new one, never
+half of one.
+
+**The gate path does not lock.** `hooks.ts` only ever reads, so `PreToolUse`
+stays at 50ms whatever else is happening. Locking a hook that fires on every
+tool call would have traded a rare corruption for a constant tax.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -317,6 +368,8 @@ Not one of these was visible from reading the code.
 | 14 | the same capture | profile cleanup raced Chrome's exit and failed a capture after every shot succeeded |
 | 15 | a screenshot of the page | SVG `<text>` cannot wrap, so every box in the loop diagram overflowed its own border |
 | 16 | recording the demo GIF | the canon kept showing a rule after it was sharpened — the re-render signature tracked rule count, not rule text |
+| 17 | 20 agents at once | read-modify-write on RULES.md lost 4 of 20 rules and produced duplicate rule numbers |
+| 18 | 8 agents, one id | `existsSync` then `mkdir` let two agents claim the same decision; the loser overwrote the winner |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported

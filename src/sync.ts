@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Rule, Surface } from './types.js';
+import { writeAtomic } from './lock.js';
 import { DEFAULT_BUDGET, renderBlock, selectRules } from './rules.js';
 
 const BEGIN_RE = /<!-- stet:begin([^>]*)-->/;
@@ -85,8 +86,9 @@ export function sync(root: string, rules: Rule[], opts: SyncOpts = {}): SyncResu
     else if (before === next) action = 'unchanged';
     else action = 'updated';
     if (!opts.dryRun && action !== 'unchanged') {
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, next);
+      // Atomic: an agent reading AGENTS.md mid-write would otherwise see a
+      // truncated canon and treat it as the whole thing.
+      writeAtomic(file, next);
     }
     results.push({ path: surface.path, agent: surface.agent, action, rules: sel.chosen.length, heldBack: sel.heldBack, tokens: sel.tokens });
   }

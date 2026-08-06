@@ -5,7 +5,10 @@ import path from 'node:path';
 import { expand, matches, matchesAny } from '../src/glob.js';
 import { canonOnce, churn, EVENTS, loadSession, postCompact, postToolUse, preToolUse, runHook, stop, targetPath } from '../src/hooks.js';
 import { install, installed, settingsPath, uninstall, WIRING } from '../src/claude.js';
-import { init } from '../src/store.js';
+import { addItem, init } from '../src/store.js';
+import { appendDirectRule, readRules } from '../src/rules.js';
+import { withLock } from '../src/lock.js';
+import { sync } from '../src/sync.js';
 
 let root: string;
 
@@ -316,5 +319,58 @@ describe('claude code wiring', () => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, '{ broken');
     expect(() => install(root)).toThrow(/not valid JSON/);
+  });
+});
+
+describe('parallel agents', () => {
+  it('serialises canon writes so no rule is lost', () => {
+    // The failure this prevents is silent: twenty concurrent writes produced
+    // sixteen rules with ten distinct numbers before the lock existed.
+    for (let i = 0; i < 12; i++) appendDirectRule(root, `rule number ${i} about this repository`);
+    const rules = readRules(root);
+    expect(rules).toHaveLength(12);
+    expect(new Set(rules.map((r) => r.n)).size).toBe(12);
+    expect(rules.map((r) => r.n)).toEqual([...rules.map((r) => r.n)].sort((a, b) => a - b));
+  });
+
+  it('releases the lock even when the write throws', () => {
+    const file = path.join(root, '.stet', 'RULES.md');
+    expect(() => withLock(file, () => { throw new Error('boom'); })).toThrow('boom');
+    expect(fs.existsSync(`${file}.lock`)).toBe(false);
+    // …and the next writer is not wedged
+    expect(() => appendDirectRule(root, 'a rule after a failed write')).not.toThrow();
+  });
+
+  it('takes over a lock left by a process that died', () => {
+    const file = path.join(root, '.stet', 'RULES.md');
+    fs.writeFileSync(`${file}.lock`, '999999 gone');
+    fs.utimesSync(`${file}.lock`, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    expect(withLock(file, () => 'recovered', { staleMs: 5_000 })).toBe('recovered');
+  });
+
+  it('refuses rather than waiting forever on a live lock', () => {
+    const file = path.join(root, '.stet', 'RULES.md');
+    fs.writeFileSync(`${file}.lock`, `${process.pid} holding`);
+    expect(() => withLock(file, () => 'never', { timeoutMs: 120, staleMs: 60_000 })).toThrow(/holding it/);
+    fs.rmSync(`${file}.lock`, { force: true });
+  });
+
+  it('never lets two agents claim the same decision id', () => {
+    const item = {
+      id: 'contested', created: '2026-08-06T10:00:00Z', question: 'Which?',
+      map: { A: 'a', B: 'b' },
+      variants: [{ label: 'A', blocks: [] }, { label: 'B', blocks: [] }],
+    } as never;
+    expect(() => addItem(root, item)).not.toThrow();
+    expect(() => addItem(root, item)).toThrow(/already exists/);
+  });
+
+  it('writes surfaces atomically, so a reader never sees half a canon', () => {
+    appendDirectRule(root, 'a rule that must appear whole or not at all');
+    sync(root, readRules(root), {});
+    const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('stet:begin');
+    expect(agents).toContain('stet:end');
+    expect(fs.readdirSync(root).filter((f) => f.includes('.tmp'))).toHaveLength(0);
   });
 });

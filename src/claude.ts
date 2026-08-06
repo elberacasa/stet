@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeAtomic } from './lock.js';
 
 /**
  * Recognising our own entries has to survive both forms the installer writes:
@@ -118,10 +119,7 @@ export function install(root: string, scope: 'project' | 'local' = 'project', co
 
   const next = `${JSON.stringify(settings, null, indentOf(file))}\n`;
   const unchanged = before === JSON.stringify(settings);
-  if (!opts.dryRun && !unchanged) {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, next);
-  }
+  if (!opts.dryRun && !unchanged) writeAtomic(file, next);
   return { file, added, removed: [], unchanged };
 }
 
@@ -148,7 +146,7 @@ export function uninstall(root: string, scope: 'project' | 'local' = 'project', 
   if (!opts.dryRun && removed.length) {
     // An empty object left behind is litter; remove the file if we made it.
     if (!Object.keys(settings).length) fs.rmSync(file);
-    else fs.writeFileSync(file, `${JSON.stringify(settings, null, indent)}\n`);
+    else writeAtomic(file, `${JSON.stringify(settings, null, indent)}\n`);
   }
   return { file, added: [], removed, unchanged: !removed.length };
 }
