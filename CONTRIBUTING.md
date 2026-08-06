@@ -77,8 +77,11 @@ somebody — delivered when you touch the file they are about.
 If `status` says nothing has ever been called, hooks load at session start:
 restart Claude Code.
 
-`.stet/RULES.md` and `.stet/NOTES.md` are committed. `.stet/sessions/` is not —
-it is per-developer state.
+`.stet/RULES.md`, `.stet/NOTES.md` and `.stet/decided/` are committed — the
+canon, the landmines, and the decisions they were earned from.
+`.stet/sessions/` is not: it is per-developer state, and
+`.claude/settings.local.json` is machine-specific because the wiring may pin an
+absolute path.
 
 ## Before you push
 

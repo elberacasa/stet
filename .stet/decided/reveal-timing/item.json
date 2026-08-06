@@ -1,0 +1,52 @@
+{
+  "id": "reveal-timing",
+  "question": "When the reveal lands, should the sharpen field steal focus?",
+  "notes": "Right now it only grabs focus when the rule looks weak. The alternative is to always focus it, so the keyboard path is pick → why → Enter → sharpen → Enter with no hand movement.",
+  "how": "Imagine your tenth decision of the day. Does having the cursor land in the field feel like momentum, or like the page grabbing at you before you have read the reveal?",
+  "tags": [
+    "ui"
+  ],
+  "globs": [
+    "src/page.ts"
+  ],
+  "map": {
+    "A": "always focus the sharpen field the moment the reveal lands",
+    "B": "only focus it when the rule fails the weakness check"
+  },
+  "variants": [
+    {
+      "label": "A",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "The cursor is already where the work is. Enter, Enter, done — the whole loop never leaves the keyboard, and the reveal reads as a step in the flow rather than a pause in it."
+        },
+        {
+          "kind": "text",
+          "title": "the cost",
+          "text": "The reveal is the payoff moment and the one thing you earned by judging blind. Snatching focus into a text field the instant it appears asks you to write before you have looked."
+        }
+      ]
+    },
+    {
+      "label": "B",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "The reveal gets a beat to itself. You read what A and B actually were, and the page only interrupts when it has something to say — a rule that names a variant label and will be useless next week."
+        },
+        {
+          "kind": "text",
+          "title": "the cost",
+          "text": "Two different behaviours depending on what you typed, which is the kind of inconsistency that makes a keyboard-first tool feel unpredictable. Sometimes Enter commits; sometimes you have to reach for the field first."
+        }
+      ]
+    }
+  ],
+  "created": "2026-08-05T22:42:15.972Z",
+  "verdict": "A",
+  "because": "I think go with the flow",
+  "rule": "I think go with the flow",
+  "revealed": "A = always focus the sharpen field the moment the reveal lands, B = only focus it when the rule fails the weakness check",
+  "decidedAt": "2026-08-05T22:45:54.265Z"
+}

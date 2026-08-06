@@ -7,14 +7,21 @@ dist/
 # The handoff brief: planning notes and product strategy, not part of the tool.
 BRIEF.md
 
-# stet's own working state at the repo root. Transient, and this repo's canon
-# was only ever test fixtures. Note the leading slash: showcase/.stet IS
-# committed, because the decisions taken there are the story.
+# stet's own working state at the repo root. Only sessions/ is transient now —
+# this repo is governed by its own tool, so its canon and its notes are shared.
+# Note the leading slash: showcase/.stet IS committed, because the decisions
+# taken there are the story.
 /.stet/*
 # …except the notes. They are facts about this codebase that were expensive to
 # learn, and a contributor cloning this repo should get them delivered at the
 # moment they touch the file, not have to rediscover them.
 !/.stet/NOTES.md
+# …and the canon, and the decisions it was earned from. This repo is governed by
+# its own tool; a contributor should get the rules and the landmines delivered,
+# not have to rediscover them. Only sessions/ is per-developer.
+!/.stet/RULES.md
+!/.stet/decided/
+!/.stet/decided/**
 /AGENTS.md
 
 # Local Claude Code wiring. `stet claude` writes machine-specific paths here
