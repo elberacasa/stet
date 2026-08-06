@@ -44,3 +44,7 @@ somebody already stepped on. Anything may add one; nothing here is binding.
 ## 10 — the fired-markers in .stet/sessions accumulate from your own session under the gate — a test must assert the suite did not CHANGE them, not that none exist
 
 *Learned 2026-08-06. Globs: test/**.*
+
+## 11 — the session journal is append-only and ordered, so the most recent {t:'p'} before an {t:'e'} is the instruction that caused that edit — no undocumented payload field needed for the join
+
+*Learned 2026-08-06. Globs: src/hooks.ts.*

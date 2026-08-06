@@ -1798,6 +1798,83 @@ Four failing tests, four real defects in a change that looked finished.
 
 ---
 
+## Reading the contract instead of guessing at it
+
+Two releases ago the churn report was left counting instead of quoting:
+
+> I wanted the `Stop` message to quote what the human actually said rather than
+> counting distinct instructions. The journal stores a `prompt_id`, not the
+> text. `UserPromptSubmit` may carry the prompt itself, which would make that
+> possible — but I could not confirm the payload shape from anything on this
+> machine, and the honest move is to not build on an assumption about someone
+> else's schema. Noted, not built.
+
+The schema is on this machine, in Claude Code's own plugin-development skill:
+
+```
+**Event-specific fields:**
+- PreToolUse/PostToolUse: tool_name, tool_input, tool_result
+- UserPromptSubmit: user_prompt
+- Stop/SubagentStop: reason
+```
+
+`user_prompt`. It was documented the whole time; the earlier search had looked
+for the wrong string. Not building on the assumption was right — and so was
+going back to check rather than leaving it noted forever.
+
+### The join needed no new field
+
+`UserPromptSubmit` carries the text. `PostToolUse` carries a `prompt_id`.
+Nothing documented links them.
+
+It does not need to. The session journal is append-only and written in order, so
+the most recent prompt recorded before an edit **is** the instruction that
+caused it. One variable while scanning the file, and no dependency on a field
+that may not exist.
+
+### What the report says now
+
+Before:
+
+```
+  src/components/Button.tsx — revised across 3 separate instructions this session
+```
+
+After:
+
+```
+  src/components/Button.tsx — revised across 3 separate instructions this session:
+    · "make the button label say what actually happens"
+    · "shorter — Buy now, not Purchase this item"
+    · "and keep it lowercase like the rest of the app"
+
+  stet rule "<the one line>" --globs 'src/components/**'
+```
+
+The count says a file was argued over. The words say what the argument was
+about — and the third one there is visibly taste rather than a bug, which is the
+judgement the whole signal exists to prompt and could not previously support.
+
+The fallback is silent and deliberate: a session that predates this, or an edit
+with no preceding prompt, still reports the count. Missing evidence is not an
+error.
+
+### The human's text on disk
+
+This is the first thing stet stores that the human typed. One line, collapsed
+and capped at 160 characters, in `.stet/sessions/` — which `stet init`
+git-ignores and stet sweeps after a day. Both bounds are tested, because "we
+only keep a little of it" is a claim like any other.
+
+### Two existing tests that changed shape honestly
+
+`churn()` gained a `said` field, and two tests asserting its exact object
+failed. They were updated to state the new shape rather than loosened to accept
+any shape — a test that stops describing the thing it tests is worse than one
+that fails.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.

@@ -38,6 +38,8 @@ interface Session {
   notesSeen: number[];
   /** Whether this session has been told how to ask. */
   askSent: boolean;
+  /** prompt id → the instruction that caused it, when it was captured. */
+  said: Record<string, string>;
   /** repo-relative path → the distinct prompts that caused a write to it */
   edits: Record<string, string[]>;
   /** paths already surfaced as churn, so it is said once */
@@ -86,7 +88,7 @@ function sessionFile(root: string, id: string): string {
   return path.join(paths(root).stet, 'sessions', `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.jsonl`);
 }
 
-type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string } | { t: 'n'; n: number } | { t: 'a' };
+type Record_ = { t: 'e'; p: string; q: string } | { t: 'i'; n: number } | { t: 'f'; p: string } | { t: 'n'; n: number } | { t: 'a' } | { t: 'p'; x: string };
 
 function append(root: string, id: string | undefined, rec: Record_): void {
   if (!id) return;
@@ -105,7 +107,7 @@ function append(root: string, id: string | undefined, rec: Record_): void {
  * every other session read in the same process.
  */
 function blank(): Session {
-  return { injected: [], notesSeen: [], askSent: false, edits: {}, flagged: [], at: 0 };
+  return { injected: [], notesSeen: [], askSent: false, said: {}, edits: {}, flagged: [], at: 0 };
 }
 
 /** Folds the log. Unparseable lines are skipped — a half-written record must
@@ -119,6 +121,10 @@ export function loadSession(root: string, id: string | undefined): Session {
   } catch {
     return s;
   }
+  // The journal is append-only and in order, so the most recent prompt seen
+  // before an edit is the instruction that caused it. That join needs no field
+  // beyond what each event already carries.
+  let saying = '';
   for (const line of text.split('\n')) {
     if (!line) continue;
     let r: Record_;
@@ -127,9 +133,12 @@ export function loadSession(root: string, id: string | undefined): Session {
     } catch {
       continue;
     }
-    if (r.t === 'e' && typeof r.p === 'string' && typeof r.q === 'string') {
+    if (r.t === 'p' && typeof r.x === 'string') {
+      saying = r.x;
+    } else if (r.t === 'e' && typeof r.p === 'string' && typeof r.q === 'string') {
       const list = (s.edits[r.p] ??= []);
       if (!list.includes(r.q)) list.push(r.q);
+      if (saying && !s.said[r.q]) s.said[r.q] = saying;
     } else if (r.t === 'i' && Number.isInteger(r.n)) {
       if (!s.injected.includes(r.n)) s.injected.push(r.n);
     } else if (r.t === 'f' && typeof r.p === 'string') {
@@ -389,13 +398,21 @@ export function postToolUse(root: string, input: HookInput): HookOutput | null {
 export interface Churn {
   path: string;
   revisions: number;
+  /** The instructions that caused them, where the words were captured. */
+  said: string[];
 }
 
 /** Files revised across enough separate instructions to look like preference. */
 export function churn(root: string, id: string | undefined, threshold = CHURN_THRESHOLD): Churn[] {
   const s = loadSession(root, id);
   return Object.entries(s.edits)
-    .map(([p, prompts]) => ({ path: p, revisions: prompts.length }))
+    .map(([p, prompts]) => ({
+      path: p,
+      revisions: prompts.length,
+      // The instructions themselves, where they were captured. A count says a
+      // file was argued over; the words say what the argument was about.
+      said: prompts.map((q) => s.said[q]).filter((x): x is string => Boolean(x)),
+    }))
     .filter((c) => c.revisions >= threshold)
     .sort((a, b) => b.revisions - a.revisions);
 }
@@ -424,7 +441,10 @@ export function stop(root: string, input: HookInput, threshold = CHURN_THRESHOLD
   const lines = [
     'stet: unwritten taste detected.',
     '',
-    ...fresh.map((c) => `  ${c.path} — revised across ${c.revisions} separate instructions this session`),
+    ...fresh.flatMap((c) => [
+      `  ${c.path} — revised across ${c.revisions} separate instructions this session${c.said.length ? ':' : ''}`,
+      ...c.said.map((x) => `    · "${x}"`),
+    ]),
     '',
     'Being asked to redo the same file across separate instructions usually means',
     'a preference is being negotiated out loud instead of recorded. If one of those',
@@ -452,6 +472,15 @@ export function preCompact(root: string, input: HookInput, budget = DEFAULT_BUDG
 }
 
 export function userPromptSubmit(root: string, input: HookInput, budget = DEFAULT_BUDGET): HookOutput | null {
+  // Record what was actually said, so `Stop` can quote it rather than counting
+  // it. Until now the churn signal knew a file had been revised across three
+  // separate instructions and had no idea what any of them were — the words are
+  // the evidence that a preference is being negotiated out loud.
+  //
+  // One line, capped: this is the human's own text on disk. `.stet/sessions/`
+  // is git-ignored by `stet init` and swept after a day.
+  const said = String(input.user_prompt ?? '').replace(/\s+/g, ' ').trim();
+  if (said) append(root, input.session_id, { t: 'p', x: said.slice(0, 160) });
   return canonOnce(root, input, 'UserPromptSubmit', budget);
 }
 

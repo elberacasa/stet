@@ -185,7 +185,7 @@ describe('churn — taste said out loud instead of written down', () => {
     postToolUse(root, edit('src/hero.tsx', 'p2'));
     expect(churn(root, 'c1')).toHaveLength(0);      // two is still iteration
     postToolUse(root, edit('src/hero.tsx', 'p3'));
-    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3 }]);
+    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3, said: [] }]);
 
     const out = stop(root, { session_id: 'c1', cwd: root });
     expect(out?.hookSpecificOutput?.additionalContext).toContain('src/hero.tsx');
@@ -226,7 +226,7 @@ describe('churn — taste said out loud instead of written down', () => {
     fs.appendFileSync(file, '{"t":"e","p":"src/hero.tsx","q":"tor\n');
     postToolUse(root, edit('src/hero.tsx', 'p2'));
     postToolUse(root, edit('src/hero.tsx', 'p3'));
-    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3 }]);
+    expect(churn(root, 'c1')).toEqual([{ path: 'src/hero.tsx', revisions: 3, said: [] }]);
   });
 
   it('records each instruction once however many writes it caused', () => {
@@ -701,5 +701,59 @@ describe('outside a project', () => {
   it('says nothing at all', () => {
     expect(runHook('/does/not/exist', 'session-start', {})).toBeNull();
     expect(runHook('/does/not/exist', 'pre-compact', {})).toBeNull();
+  });
+});
+
+// ── taste said out loud, in the words it was said in ───────────────────────
+describe('what the human actually said', () => {
+  const say = (text: string, session = 's1') =>
+    runHook(root, 'user-prompt', { session_id: session, cwd: root, user_prompt: text });
+  const edit = (q: string, file = 'src/components/Button.tsx', session = 's1') =>
+    runHook(root, 'post-tool-use', {
+      session_id: session, cwd: root, prompt_id: q, tool_name: 'Edit',
+      tool_input: { file_path: path.join(root, file) },
+    });
+
+  it('joins an edit to the instruction that caused it, by journal order', () => {
+    // The journal is append-only and in order, so the most recent prompt before
+    // an edit is its instruction. No undocumented field needed for the join.
+    say('make the button label say what actually happens');
+    edit('p1');
+    say('shorter — Buy now, not Purchase this item');
+    edit('p2');
+    say('and keep it lowercase like the rest of the app');
+    edit('p3');
+
+    const ctx = stop(root, { session_id: 's1', cwd: root })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('"make the button label say what actually happens"');
+    expect(ctx).toContain('"and keep it lowercase like the rest of the app"');
+    expect(ctx, 'the scoped rule is still the suggestion').toContain(`--globs 'src/components/**'`);
+  });
+
+  it('still reports the churn when the words were never captured', () => {
+    // A session that began before this existed, or any edit with no preceding
+    // prompt. Counting is the fallback, not an error.
+    for (const q of ['q1', 'q2', 'q3']) edit(q, 'src/other/Thing.tsx', 's2');
+    const ctx = stop(root, { session_id: 's2', cwd: root })?.hookSpecificOutput?.additionalContext ?? '';
+    expect(ctx).toContain('revised across 3 separate instructions');
+    expect(ctx).not.toContain('· "');
+  });
+
+  it('caps what it keeps of a prompt', () => {
+    // The human's own text on disk: one line, bounded. `.stet/sessions/` is
+    // git-ignored by init and swept after a day.
+    say('x'.repeat(400), 's3');
+    edit('p9', 'src/big/File.tsx', 's3');
+    const journal = fs.readFileSync(path.join(root, '.stet/sessions/s3.jsonl'), 'utf8');
+    const rec = journal.split('\n').map((l) => l && JSON.parse(l)).find((r) => r && r.t === 'p');
+    expect(rec.x.length).toBeLessThanOrEqual(160);
+  });
+
+  it('collapses a multi-line prompt to one line', () => {
+    say('first line\n\n  second line   with   spaces', 's4');
+    edit('p8', 'src/x/Y.tsx', 's4');
+    const journal = fs.readFileSync(path.join(root, '.stet/sessions/s4.jsonl'), 'utf8');
+    const rec = journal.split('\n').map((l) => l && JSON.parse(l)).find((r) => r && r.t === 'p');
+    expect(rec.x).toBe('first line second line with spaces');
   });
 });

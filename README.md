@@ -277,13 +277,24 @@ has been revised across three separate instructions, `Stop` says so:
 ```
 stet: unwritten taste detected.
 
-  src/hero.tsx — revised across 3 separate instructions this session
+  src/hero.tsx — revised across 3 separate instructions this session:
+    · "make the button label say what actually happens"
+    · "shorter — Buy now, not Purchase this item"
+    · "and keep it lowercase like the rest of the app"
+
+  stet rule "<the one line>" --globs 'src/**'
 ```
 
 Three edits inside one instruction is an agent working. Three edits across
 three instructions is a human correcting — and a correction repeated is a
-preference nobody has recorded. `stet churn` shows the standing tally. This is
-a hypothesis about a signal, not a proven one; the threshold is `--threshold`.
+preference nobody has recorded. It quotes what you actually said, because a
+count says a file was argued over and the words say what the argument was
+about — the third line there is visibly taste rather than a bug. `stet churn`
+shows the standing tally. This is a hypothesis about a signal, not a proven
+one; the threshold is `--threshold`.
+
+Those prompts are kept one line each, capped, in `.stet/sessions/` — which
+`stet init` git-ignores and stet sweeps after a day.
 
 The hooks go in `.claude/settings.local.json`, which is per-developer and not
 checked in. That is deliberate: a hook committed to `.claude/settings.json`
