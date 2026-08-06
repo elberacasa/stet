@@ -242,6 +242,8 @@ a.urlblock span{color:var(--faint)}
 }
 .commit:hover{background:rgba(121,194,178,.1)}
 .commit[disabled]{border-color:var(--line);color:var(--faint);cursor:not-allowed;background:var(--panel)}
+.commit.anyway{border-color:var(--warm);color:var(--warm)}
+.commit.anyway:hover{background:rgba(231,154,94,.1)}
 .flash{color:var(--warm);padding:0 var(--step) 12px;max-width:1760px;margin:0 auto}
 .hintrow{
   max-width:1760px;margin:0 auto;padding:0 var(--step) 12px;color:var(--faint);font-size:11px;
@@ -568,17 +570,25 @@ function weakness(t){
 function renderRevealRail(){
   var r=reveal;
   var surf=(r.surfaces||[]).filter(function(s){return s.action!=="unchanged"}).map(function(s){return s.path}).join(", ");
-  var text=draft.sharpen!==null?draft.sharpen:r.rule.text;
-  var warn=weakness(text);
+  // If the reason will not work as a rule, start the field empty rather than
+  // pre-filled. A focused field holding a weak line makes Enter the cheapest
+  // action, and the warning becomes something to click past.
+  var original=r.rule.text;
+  var born=weakness(original);
+  var text=draft.sharpen!==null?draft.sharpen:(born?"":original);
+  var injected=text.trim()||original;
+  var warn=weakness(injected);
   return '<div class="rail reveal-rail"><div class="rail-inner">'+
     '<div class="rulecard">'+
       '<div class="label">rule '+r.rule.n+' — now you know what you chose, sharpen it'+
         '<span class="dim">'+esc(r.revealed||"")+"</span></div>"+
-      '<div class="field"><input id="sharpen" value="'+esc(text)+'" placeholder="what should the next agent do?"></div>'+
-      '<div class="preview"><span class="pk">agents will read</span><code>'+r.rule.n+". "+esc(text)+"</code></div>"+
+      '<div class="field"><input id="sharpen" value="'+esc(text)+'" placeholder="'+
+        (born?"what should the next agent do? — your reason will not work as a rule":"what should the next agent do?")+'"></div>'+
+      '<div class="preview"><span class="pk">agents will read</span><code>'+r.rule.n+". "+esc(injected)+"</code></div>"+
       (warn?'<div class="warn">'+esc(warn)+"</div>":"")+
       '<div class="surfaces">'+(surf?"synced → "+esc(surf):"in every agent surface in this repo")+"</div></div>"+
-    '<button class="commit" id="next">let it stand <kbd>⏎</kbd></button>'+
+    '<button class="commit'+(warn?" anyway":"")+'" id="next">'+
+      (warn?"let it stand anyway":"let it stand")+' <kbd>⏎</kbd></button>'+
   "</div></div>";
 }
 
@@ -682,8 +692,11 @@ function wire(entry){
     sharpen.addEventListener("input",function(){
       draft.sharpen=sharpen.value;
       var card=sharpen.closest(".rulecard");
-      card.querySelector(".preview code").textContent=reveal.rule.n+". "+draft.sharpen;
-      var w=weakness(draft.sharpen), node=card.querySelector(".warn");
+      var shown=draft.sharpen.trim()||reveal.rule.text;
+      card.querySelector(".preview code").textContent=reveal.rule.n+". "+shown;
+      var w=weakness(shown), node=card.querySelector(".warn");
+      var btn=document.getElementById("next");
+      if(btn){ btn.className="commit"+(w?" anyway":""); btn.innerHTML=(w?"let it stand anyway":"let it stand")+' <kbd>\u23ce</kbd>'; }
       if(w&&!node){
         node=document.createElement("div");node.className="warn";
         card.insertBefore(node,card.querySelector(".surfaces"));

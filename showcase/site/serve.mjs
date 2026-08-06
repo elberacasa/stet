@@ -1,7 +1,43 @@
-import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+// Serves the showcase pages for capture and review.
+//
+// Read the file BEFORE writing any header. The first version wrote 200 and
+// then read; a missing file threw after the headers were already sent, the
+// catch wrote them a second time, and ERR_HTTP_HEADERS_SENT took the whole
+// server down. That is why it kept dying between captures.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+
 const dir = path.dirname(new URL(import.meta.url).pathname);
-http.createServer((q, r) => {
-  const f = path.join(dir, q.url === '/' ? 'variant-a.html' : q.url.split('?')[0]);
-  try { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync(f)); }
-  catch { r.writeHead(404); r.end('no'); }
-}).listen(7900, '127.0.0.1', () => console.log('serving variants on 7900'));
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+};
+
+http
+  .createServer((req, res) => {
+    const rel = (req.url === '/' ? '/index.html' : req.url).split('?')[0];
+    const file = path.join(dir, decodeURIComponent(rel));
+    if (!path.resolve(file).startsWith(path.resolve(dir) + path.sep)) {
+      res.writeHead(403, { 'content-type': 'text/plain' }).end('no');
+      return;
+    }
+    let body;
+    try {
+      body = fs.readFileSync(file);
+    } catch {
+      res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
+      'content-length': body.length,
+      'cache-control': 'no-store',
+    });
+    res.end(body);
+  })
+  .listen(7900, '127.0.0.1', () => console.log('showcase on http://127.0.0.1:7900/'));

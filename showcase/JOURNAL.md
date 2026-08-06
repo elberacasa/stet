@@ -93,6 +93,63 @@ after:   A → A-1.jpg          B → B-4.jpg           ← tells you nothing
 
 ---
 
+## The first verdict
+
+**A — proof first.** The blind test did its job: the winner was the variant
+authored second, and the shuffle meant it was judged without that being visible
+from either side.
+
+`site/index.html` is built from it — the refusal is the hero, the explanation
+comes after, and the measured claims are a table rather than adjectives.
+
+### Finding 4 — the claimed glob matched nothing, and nothing said so
+
+The item claimed `showcase/site/**`. But the project root **is** `showcase/`, so
+a write to that file is seen as `site/variant-b.html`, and the glob never
+matched. The item was accepted, listed as pending, rendered on the page — and
+its gate was inert the whole time.
+
+Globs are relative to the project root, which is not always where the author is
+mentally standing. `stet ask` now checks at intake and says so:
+
+```
+stet: "showcase/site/**" matches nothing under /Users/…/stet/showcase
+      this project is rooted at showcase/ — did you mean "site/**"?
+      the decision is queued, but it will not gate any writes.
+```
+
+A warning rather than a rejection: claiming a path for a file you are about to
+create is legitimate. Claiming one that cannot exist is not.
+
+### Finding 5 — the sharpen step was not working, and the data said so first
+
+Two verdicts, two rules, both unusable:
+
+```
+1. I think go with the flow
+2. I like it, looks very clean and impactful to show an agent being stopped mid write
+```
+
+The weakness check flagged both. The warning was shown and clicked past both
+times — which makes it a design failure, not a user failure. The sharpen field
+pre-filled with the in-the-moment reason, focused and selected, so `Enter` kept
+it. The weak path was the cheapest path.
+
+Now, when the reason will not survive as a rule, the field starts **empty** with
+a placeholder saying so, and the button reads **let it stand anyway** until
+something usable is typed. It still never writes the rule for you — it just
+stops making the bad outcome the default one.
+
+### Finding 6 — my own scaffolding, worth recording
+
+The variant server kept dying between captures. It wrote `200` and *then* read
+the file, so a missing path threw after headers were sent, the catch wrote them
+again, and `ERR_HTTP_HEADERS_SENT` killed the process. Not stet's bug, but it
+cost three capture attempts and is the same shape as everything else here: it
+reported success right up until it did not.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -107,7 +164,13 @@ Not one of these was visible from reading the code.
 | 6 | asking "can an agent drive this?" | `stet ask --help` hung; the item format was undocumented entirely |
 | 7 | this showcase | no way to start a project inside another one |
 | 8 | this showcase | asset filenames leaked the blind mapping into the DOM |
+| 9 | this showcase | a glob relative to the wrong root matched nothing and gated nothing, silently |
+| 10 | two real verdicts | the sharpen step made keeping a useless rule the cheapest action |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
-invisible from the code and obvious from the use.** Six of the eight reported
+invisible from the code and obvious from the use.** Eight of the ten reported
 success while broken.
+
+Finding 10 is the one worth dwelling on, because it was not found by a test or a
+crash — it was found by looking at what two real verdicts actually produced. The
+mechanism worked exactly as designed and the design was wrong.

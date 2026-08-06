@@ -58,5 +58,10 @@
       ]
     }
   ],
-  "created": "2026-08-06T01:09:36.176Z"
+  "created": "2026-08-06T01:09:36.176Z",
+  "verdict": "A",
+  "because": "I like it, looks very clean and impactful to show an agent being stopped mid write",
+  "rule": "I like it, looks very clean and impactful to show an agent being stopped mid write",
+  "revealed": "A = proof first — the actual deny message is the hero, the headline explains what you just read, B = promise first — headline states the claim, the refusal appears lower as evidence",
+  "decidedAt": "2026-08-06T01:33:39.024Z"
 }

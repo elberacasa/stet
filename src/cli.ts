@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 
 interface Args {
   cmd: string;
@@ -329,10 +329,33 @@ async function ask(): Promise<void> {
     throw new Error(`that is not valid JSON — ${(err as Error).message}`);
   }
   if (!validId((item as { id?: unknown }).id)) throw new Error('the item needs an "id" of letters, digits, . _ or -');
+  warnUnmatchedGlobs(item);
   const dir = addItem(root, item, { shuffle: args.flags.shuffle !== 'false' });
   const rel = path.relative(process.cwd(), dir) || dir;
   out(item.id);
   process.stderr.write(`stet: queued ${item.id} — put any assets beside ${rel}/item.json\n`);
+}
+
+/**
+ * A glob that matches nothing gates nothing, silently. Globs are written
+ * relative to the project root, which is not always the directory the author
+ * had in mind — claiming `showcase/site/**` from inside a project rooted at
+ * `showcase/` produces an item that looks correct everywhere and never fires.
+ */
+function warnUnmatchedGlobs(item: Item): void {
+  for (const g of item.globs ?? []) {
+    if (typeof g !== 'string' || !g) continue;
+    const literal = g.split(/[*?{[]/)[0].replace(/\/+$/, '');
+    if (!literal || fs.existsSync(path.join(root, literal))) continue;
+
+    process.stderr.write(`stet: "${g}" matches nothing under ${root}\n`);
+    // The commonest cause: a path written relative to a parent directory.
+    const here = path.basename(root);
+    if (g.startsWith(`${here}/`)) {
+      process.stderr.write(`      this project is rooted at ${here}/ — did you mean "${g.slice(here.length + 1)}"?\n`);
+    }
+    process.stderr.write('      the decision is queued, but it will not gate any writes.\n');
+  }
 }
 
 /**

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>stet — let it stand</title>
+<meta name="description" content="Your agents ask once. Your answer stands. A local verdict gate that turns your taste into rules any coding agent obeys.">
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --bg:#14151a; --panel:#1b1d24; --line:#2b2e38; --line2:#3a3e4a;
+    --ink:#d8d2c4; --dim:#8d8677; --faint:#5f5c52;
+    --warm:#e79a5e; --cool:#79c2b2;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Monaco,monospace;
+    --step:28px;
+  }
+  html,body{margin:0;background:var(--bg)}
+  body{color:var(--ink);font:14px/1.62 var(--mono);-webkit-font-smoothing:antialiased}
+  a{color:var(--warm);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:940px;margin:0 auto;padding:0 var(--step)}
+
+  /* the signature: tiny letterspaced label with a hairline under it */
+  .label{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--cool);
+    border-bottom:1px solid var(--line);padding-bottom:7px;margin:0 0 22px;
+    display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+  .label span{color:var(--faint);letter-spacing:.16em}
+
+  header{border-bottom:1px solid var(--line)}
+  header .wrap{padding-top:18px;padding-bottom:18px;display:flex;
+    justify-content:space-between;align-items:center;gap:20px}
+  .mark{color:var(--warm);letter-spacing:.22em;font-weight:600}
+  header nav{display:flex;gap:22px;font-size:12px}
+  header nav a{color:var(--faint)}
+  header nav a:hover{color:var(--ink);text-decoration:none}
+
+  /* Rule 1 — the refusal is the hero. The explanation comes after it. */
+  .hero{padding:56px 0 8px}
+  .deny{background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--warm);
+    border-radius:5px;padding:22px 24px;font-size:13px;line-height:1.7;color:var(--dim);
+    white-space:pre-wrap;margin:0 0 30px;overflow-x:auto}
+  .deny b{color:var(--warm);font-weight:400}
+  .deny i{color:var(--ink);font-style:normal}
+  h1{font:inherit;font-size:24px;line-height:1.42;margin:0 0 16px;max-width:46ch}
+  h1 em{font-style:normal;color:var(--warm)}
+  .sub{color:var(--dim);max-width:62ch;margin:0 0 28px;font-size:13px}
+  .cmd{display:inline-flex;gap:10px;align-items:baseline;border:1px solid var(--line);
+    background:var(--panel);border-radius:5px;padding:13px 18px;color:var(--cool)}
+  .cmd span{color:var(--faint)}
+  .free{color:var(--faint);font-size:12px;margin:14px 0 0}
+
+  .rail{border-top:1px solid var(--line);margin-top:52px;padding:26px 0 0;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+  .rail div{font-size:12.5px;color:var(--faint);line-height:1.65}
+  .rail b{display:block;color:var(--cool);font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;margin-bottom:8px;font-weight:400}
+
+  section{padding:64px 0}
+  section + section{border-top:1px solid var(--line)}
+  .loop{display:grid;grid-template-columns:auto 1fr;gap:0 20px;font-size:13px}
+  .loop dt{color:var(--warm);padding:9px 0}
+  .loop dd{margin:0;padding:9px 0;color:var(--dim);border-bottom:1px solid var(--line)}
+  .loop dt{border-bottom:1px solid var(--line)}
+  .loop dt:last-of-type,.loop dd:last-of-type{border-bottom:none}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{text-align:left;padding:9px 14px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--cool);font-weight:400;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+  td{color:var(--dim)}
+  td b{color:var(--ink);font-weight:400}
+
+  footer{border-top:1px solid var(--line);padding:26px 0 60px;color:var(--faint);font-size:12px;
+    display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+  @media (max-width:720px){
+    :root{--step:20px}
+    .rail{grid-template-columns:1fr;gap:22px}
+    h1{font-size:20px}
+    .deny{font-size:12px;padding:18px}
+    section{padding:44px 0}
+  }
+</style>
+
+<header><div class="wrap">
+  <span class="mark">stet</span>
+  <nav>
+    <a href="#how">how it works</a>
+    <a href="https://github.com/elberacasa/stet">github</a>
+    <a href="https://www.npmjs.com/package/stetmark">npm</a>
+  </nav>
+</div></header>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="deny"><b>stet: this path is governed by a decision the human has not made yet.</b>
+
+  <i>api-shape</i> — "Which shape should the list endpoint return?"
+  claims: src/api/**
+
+Do not implement either option yet — whichever you pick has a 50% chance
+of being thrown away. Either work somewhere else, or block on the verdict with:
+  stet await api-shape</div>
+
+    <h1>That is a coding agent being stopped mid-write, because
+      <em>you had not decided yet.</em></h1>
+    <p class="sub">Agents hit forks with no right answer — which type, which copy, how much
+      abstraction — and they guess, because they are trained to finish. stet refuses the
+      write, asks you once, and makes your verdict binding on every agent that touches the
+      repo from then on.</p>
+
+    <div class="cmd">npx stetmark <span># in any repo</span></div>
+    <p class="free">Zero runtime dependencies. Nothing leaves your machine. No account, no key, no network.</p>
+
+    <div class="rail">
+      <div><b>blind</b>Labels are shuffled against what the variants really are, so you judge the work and not the approach you already favour.</div>
+      <div><b>binding</b>Your one line becomes a rule, injected into AGENTS.md, CLAUDE.md, .cursorrules — and, in Claude Code, into the hook that refuses the write.</div>
+      <div><b>free</b>The artifacts never enter the model's context. You look at them in a browser, so the comparison costs no tokens.</div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="label">the loop <span>one command, any repo</span></div>
+    <dl class="loop">
+      <dt>1</dt><dd>An agent hits a fork it cannot derive and runs <b>stet ask</b>. It writes a small file, blocks on a file watch, and burns nothing while it waits.</dd>
+      <dt>2</dt><dd>You get a notification. Whenever you feel like it, you open a page showing the real thing — matched captures, live pages, audio, whatever the choice is made of.</dd>
+      <dt>3</dt><dd>You pick, blind, and say why. Committing reveals what A and B actually were — and that is the first moment you can write a rule worth obeying.</dd>
+      <dt>4</dt><dd>The rule lands in your canon and syncs into every agent instruction surface in the repo. The agent unblocks and continues with your answer.</dd>
+      <dt>5</dt><dd>Next week a different agent, on a different machine, obeys it without asking.</dd>
+    </dl>
+  </section>
+
+  <section>
+    <div class="label">why it is cheaper, not slower</div>
+    <table>
+      <tr><th>claim</th><th>measured</th></tr>
+      <tr><td><b>A waiting agent burns nothing.</b> <code>stet await</code> sleeps on a file watch rather than polling.</td>
+          <td>17.08s blocked on <b>0.09s</b> of CPU, and the counter did not move while waiting.</td></tr>
+      <tr><td><b>Rules arrive when they apply</b>, not all at once at session start.</td>
+          <td>A 40-rule canon: 1046 always-resident tokens → <b>538</b> delivered just in time, 20 rules never sent.</td></tr>
+      <tr><td><b>The canon stays small.</b> A hard budget holds rules back rather than truncating silently.</td>
+          <td>1 rule = <b>65</b> tokens. 40 rules = <b>971</b>, measured with a real BPE tokenizer.</td></tr>
+      <tr><td><b>The gate costs nothing to run.</b> It sits in a hook on every write.</td>
+          <td><b>50ms</b> per invocation; 1.3ms to decide after 1500 files; 5.0ms against 1200 rules.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="label">what it is not</div>
+    <p class="sub">Not an agent orchestrator. Not a dashboard. Not traffic-based A/B testing. Not a
+      hosted service, an account, or telemetry. It is a gate, and anything can feed it.</p>
+  </section>
+</div>
+
+<footer><div class="wrap" style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:0">
+  <span>stet — Latin, <i>let it stand</i>. The proofreader's mark.</span>
+  <span>MIT · <a href="https://github.com/elberacasa/stet">github.com/elberacasa/stet</a></span>
+</div></footer>
