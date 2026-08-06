@@ -392,9 +392,28 @@ function diffHtml(text){
     return c?'<span class="'+c+'">'+esc(l)+"</span>":esc(l);
   }).join("\\n");
 }
-function asset(id,src){
-  if(/^(https?:|data:|\\/)/.test(src)) return src;
-  return "/a/"+encodeURIComponent(id)+"/"+src.split("/").map(encodeURIComponent).join("/");
+/* item.json is written by an agent, so every URL in it is untrusted. A
+   javascript: href is currently defused by accident — asset() does not know the
+   scheme, so it becomes a relative path — and defence by accident stops working
+   the moment someone widens the check. Refuse the scheme on purpose. */
+function safeUrl(u,allowData){
+  var s=String(u||"").trim();
+  if(/^(https?:)?\\/\\//.test(s)||/^\\//.test(s)) return s;
+  if(allowData&&/^data:image\\//i.test(s)) return s;
+  if(/^[a-z][a-z0-9+.-]*:/i.test(s)) return null;   // any other scheme, including javascript:
+  return "";                                          // relative — caller resolves it
+}
+function asset(id,src,allowData){
+  var safe=safeUrl(src,allowData!==false);
+  if(safe===null) return null;
+  if(safe) return safe;
+  return "/a/"+encodeURIComponent(id)+"/"+String(src).split("/").map(encodeURIComponent).join("/");
+}
+
+/* Shown, never silently dropped: a refused URL is a fact the human should see. */
+function refused(kind,value){
+  return '<div class="unknown">refused a '+esc(kind)+' with an unusable scheme — shown as text, not loaded</div>'+
+    '<div class="block"><pre class="code">'+esc(String(value))+"</pre></div>";
 }
 
 function blockHtml(b,id){
@@ -413,15 +432,20 @@ function blockHtml(b,id){
     case "image":
       // Not lazy: with intrinsic sizing an unloaded image is a 0x0 box, so it
       // never enters the viewport and never loads. These are local files.
+      var isrc=asset(id,String(b.src||""));
+      if(isrc===null) return refused("image",b.src);
       return '<div class="block">'+t+'<figure class="img"><img alt="'+esc(b.title||"variant image")+
-        '" src="'+esc(asset(id,String(b.src||"")))+'"></figure></div>';
+        '" src="'+esc(isrc)+'"></figure></div>';
     case "audio":
-      return '<div class="block">'+t+'<audio controls preload="none" src="'+esc(asset(id,String(b.src||"")))+'"></audio></div>';
+      var asrc=asset(id,String(b.src||""),false);
+      if(asrc===null) return refused("audio",b.src);
+      return '<div class="block">'+t+'<audio controls preload="none" src="'+esc(asrc)+'"></audio></div>';
     case "url":
       // The whole running thing, not a picture of it. Live and clickable.
       // A relative href resolves to a file beside item.json, so a variant can
       // be self-contained; an absolute one points at your dev server.
-      var href=asset(id,String(b.href||"about:blank"));
+      var href=asset(id,String(b.href||""),false);
+      if(href===null) return refused("url",b.href);
       return '<div class="block">'+t+
         '<div class="live"><iframe src="'+esc(href)+'" loading="lazy" '+
           'sandbox="allow-scripts allow-forms allow-popups"></iframe></div>'+

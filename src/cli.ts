@@ -13,7 +13,7 @@ import { addItem, findEntry, findRoot, init, listEntries, paths, validId } from 
 import { sync, unsync } from './sync.js';
 import type { Item } from './types.js';
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 
 interface Args {
   cmd: string;

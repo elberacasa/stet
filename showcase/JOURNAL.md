@@ -346,6 +346,56 @@ tool call would have traded a rare corruption for a constant tax.
 
 ---
 
+## Stress testing the server and the page
+
+The store, the hooks and concurrency had all been attacked. The interface never
+had — it had only ever been driven gently, by me, one decision at a time. Eight
+scenarios, run against the real server:
+
+```
+1. two tabs commit the same decision at once   ✓ 200 and 400, one rule written
+2. hostile item content reaching the page      ✓ 0 scripts executed
+3. an unparseable item                         ✓ surfaced, not skipped
+4. 25 browser tabs listening at once           ✓ state still answers in 1ms
+5. a fan-out queueing 40 decisions             ✓ 2ms for 42 pending
+6. the blind guarantee under all of it         ✓ 42 pending, no map leaked
+7. ten malformed requests                      ✓ no 500, server alive
+8. a decision landing mid-commit               ✓ exactly one rule added
+```
+
+The interesting result is that seven of these passed first time. The store was
+already careful, and the two-tab race is defended by the same thing that makes
+the gate work: `decide` renames the item directory, and a rename either happens
+or does not.
+
+### Finding 14 — one of the passes was luck
+
+`item.json` is authored by an agent, so a prompt-injected agent could put
+`javascript:` in a `url` block, or `<script>` in a question. Loaded in a real
+browser with payloads in every field — question, notes, how, tags, titles, code,
+diff paths, image src, url href — **nothing executed**. Everything rendered as
+visible text.
+
+But the `javascript:` href passed for the wrong reason. `asset()` tests for
+`https?:`, `data:` and `/`, and a scheme it does not recognise falls through to
+the relative-path branch, so `javascript:alert(1)` became
+`/a/hostile/javascript%3Aalert(1)`. Defused by accident. That stops being true
+the instant somebody widens that check for a good reason.
+
+Schemes are now refused deliberately: `http`, `https`, protocol-relative and
+repo-relative paths are allowed; `data:image/*` is allowed for images only;
+everything else is refused and **shown as text**, so a human sees what was
+attempted rather than the tool quietly dropping it.
+
+### And the honest indicator, verified honestly
+
+Killed the server with the page open: it says **server gone**. Restarted it:
+the page reconnected by itself and went back to **live**, still rendered, still
+zero scripts executed. That claim had been in the README since v0.1 and had
+never once been tested.
+
+---
+
 ## Running tally of bugs found by use, across the whole project
 
 Not one of these was visible from reading the code.
@@ -370,6 +420,7 @@ Not one of these was visible from reading the code.
 | 16 | recording the demo GIF | the canon kept showing a rule after it was sharpened — the re-render signature tracked rule count, not rule text |
 | 17 | 20 agents at once | read-modify-write on RULES.md lost 4 of 20 rules and produced duplicate rule numbers |
 | 18 | 8 agents, one id | `existsSync` then `mkdir` let two agents claim the same decision; the loser overwrote the winner |
+| 19 | injecting a hostile item | `javascript:` URLs were defused by accident, not on purpose — safe today, unsafe after any widening of the scheme check |
 
 The pattern is consistent enough to be a rule: **the failures that matter are
 invisible from the code and obvious from the use.** Eight of the ten reported

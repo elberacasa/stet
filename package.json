@@ -1,6 +1,6 @@
 {
   "name": "stetmark",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "stet \u2014 let it stand. Your agents ask once, your answer stands. A local verdict gate that turns your taste into rules coding agents obey.",
   "keywords": [
     "ai",
@@ -36,8 +36,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "prepublishOnly": "tsc && vitest run && node test/stress.mjs",
-    "stress": "node test/stress.mjs"
+    "prepublishOnly": "tsc && vitest run && node test/stress.mjs && node test/stress-server.mjs",
+    "stress": "node test/stress.mjs && node test/stress-server.mjs"
   },
   "engines": {
     "node": ">=20"
